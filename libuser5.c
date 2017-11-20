@@ -120,15 +120,7 @@ int Mbox_Receive(int mboxID, void *msgPtr, int msgSize)
     sysArg.arg2 = (void *) (long) msgPtr;
     sysArg.arg3 = (void *) (long) msgSize;
     USLOSS_Syscall( &sysArg );
-        /*
-         * This doesn't belong here. The copy should by done by the
-         * system call.
-         */
-        if ( (int) (long) sysArg.arg4 == -1 )
-                return (int) (long) sysArg.arg4;
-        memcpy( (char*)msgPtr, (char*)sysArg.arg2, (int) (long) sysArg.arg3);
-        return 0;
-
+    return (int) (long) sysArg.arg4;
 } /* end of Mbox_Receive */
 
 

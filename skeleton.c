@@ -17,12 +17,8 @@
 #include <vm.h>
 #include <string.h>
 
-extern void mbox_create(USLOSS_Sysargs *args_ptr);
-extern void mbox_release(USLOSS_Sysargs *args_ptr);
-extern void mbox_send(USLOSS_Sysargs *args_ptr);
-extern void mbox_receive(USLOSS_Sysargs *args_ptr);
-extern void mbox_condsend(USLOSS_Sysargs *args_ptr);
-extern void mbox_condreceive(USLOSS_Sysargs *args_ptr);
+#include "syscallHandlers.h"
+#include "phase5utility.h"
 
 static Process processes[MAXPROC];
 
@@ -31,7 +27,6 @@ FaultMsg faults[MAXPROC]; /* Note that a process can have only
                            * allocate the messages statically
                            * and index them by pid. */
 VmStats  vmStats;
-
 
 static void FaultHandler(int type, void * offset);
 
@@ -52,8 +47,7 @@ static void vmDestroy(USLOSS_Sysargs *USLOSS_SysargsPtr);
  *
  *----------------------------------------------------------------------
  */
-int
-start4(char *arg)
+int start4(char *arg)
 {
     int pid;
     int result;
@@ -64,8 +58,8 @@ start4(char *arg)
     systemCallVec[SYS_MBOXRELEASE]     = mboxRelease;
     systemCallVec[SYS_MBOXSEND]        = mboxSend;
     systemCallVec[SYS_MBOXRECEIVE]     = mboxReceive;
-    systemCallVec[SYS_MBOXCONDSEND]    = mboxCondsend;
-    systemCallVec[SYS_MBOXCONDRECEIVE] = mboxCondreceive;
+    systemCallVec[SYS_MBOXCONDSEND]    = mboxCondSend;
+    systemCallVec[SYS_MBOXCONDRECEIVE] = mboxCondReceive;
 
     /* user-process access to VM functions */
     sys_vec[SYS_VMINIT]    = vmInit;
