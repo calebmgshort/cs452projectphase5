@@ -1,4 +1,6 @@
-PREFIX = ${HOME}
+#PREFIX = ${HOME}
+#PREFIX = /home/theimbichner/Csc452Project/
+PREFIX = /Users/Caleb/Documents/ComputerScience/csc452/project/compilefolder
 
 TARGET = libphase5.a
 ASSIGNMENT = 452phase5
@@ -34,12 +36,12 @@ LDFLAGS += -L. -L${PREFIX}/lib
 TESTDIR = testcases
 TESTS = test1 test2 test3 test4 simple1 simple2 simple3 simple4 simple5 simple6 \
 	simple7 simple8 simple9 simple10 \
-	chaos replace1 outOfSwap replace2 gen clock quit 
+	chaos replace1 outOfSwap replace2 gen clock quit
 LIBS = -lusloss3.6 -l$(PHASE1LIB) -l$(PHASE2LIB) -l$(PHASE3LIB) \
        -lphase5 -l$(PHASE4LIB)
 
 $(TARGET):	$(COBJS)
-		$(AR) -r $@ $(COBJS) 
+		$(AR) -r $@ $(COBJS)
 
 #$(TESTS):	$(TARGET) $(TESTDIR)/$$@.c
 $(TESTS):	$(TARGET)

@@ -1,11 +1,12 @@
 /*
- * skeleton.c
+ * phase5.c
  *
  * This is a skeleton for phase5 of the programming assignment. It
  * doesn't do much -- it is just intended to get you started.
  */
 
 
+#include <usloss.h>
 #include <usyscall.h>
 #include <assert.h>
 #include <phase1.h>
@@ -32,12 +33,14 @@ static void FaultHandler(int type, void * offset);
 
 static void vmInit(USLOSS_Sysargs *USLOSS_SysargsPtr);
 static void vmDestroy(USLOSS_Sysargs *USLOSS_SysargsPtr);
+
+extern int start5(char *);
 /*
  *----------------------------------------------------------------------
  *
  * start4 --
  *
- * Initializes the VM system call handlers. 
+ * Initializes the VM system call handlers.
  *
  * Results:
  *      MMU return status
@@ -62,8 +65,8 @@ int start4(char *arg)
     systemCallVec[SYS_MBOXCONDRECEIVE] = mboxCondReceive;
 
     /* user-process access to VM functions */
-    sys_vec[SYS_VMINIT]    = vmInit;
-    sys_vec[SYS_VMDESTROY] = vmDestroy; 
+    systemCallVec[SYS_VMINIT]    = vmInit;
+    systemCallVec[SYS_VMDESTROY] = vmDestroy;
     result = Spawn("Start5", start5, NULL, 8*USLOSS_MIN_STACK, 2, &pid);
     if (result != 0) {
         USLOSS_Console("start4(): Error spawning start5\n");
@@ -149,7 +152,7 @@ vmInitReal(int mappings, int pages, int frames, int pagers)
 
    CheckMode();
    status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
-   if (status != MMU_OK) {
+   if (status != USLOSS_MMU_OK) {
       USLOSS_Console("vmInitReal: couldn't initialize MMU, status %d\n", status);
       abort();
    }
@@ -159,7 +162,7 @@ vmInitReal(int mappings, int pages, int frames, int pagers)
     * Initialize page tables.
     */
 
-   /* 
+   /*
     * Create the fault mailbox.
     */
 
@@ -239,13 +242,13 @@ vmDestroyReal(void)
    /*
     * Kill the pagers here.
     */
-   /* 
+   /*
     * Print vm statistics.
     */
    USLOSS_Console("vmStats:\n");
    USLOSS_Console("pages: %d\n", vmStats.pages);
    USLOSS_Console("frames: %d\n", vmStats.frames);
-   USLOSS_Console("blocks: %d\n", vmStats.blocks);
+   //USLOSS_Console("blocks: %d\n", vmStats.blocks);
    /* and so on... */
 
 } /* vmDestroyReal */
@@ -267,9 +270,8 @@ vmDestroyReal(void)
  *
  *----------------------------------------------------------------------
  */
-static void
-FaultHandler(int type /* MMU_INT */,
-             int arg  /* Offset within VM region */)
+static void FaultHandler(int type /* MMU_INT */,
+             void* offset /* Offset within VM region */)
 {
    int cause;
 
@@ -287,7 +289,7 @@ FaultHandler(int type /* MMU_INT */,
 /*
  *----------------------------------------------------------------------
  *
- * Pager 
+ * Pager
  *
  * Kernel process that handles page faults and does page replacement.
  *
