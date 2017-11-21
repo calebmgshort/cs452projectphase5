@@ -1,3 +1,14 @@
+#include <usloss.h>
+#include <usyscall.h>
+#include <assert.h>
+#include <phase1.h>
+#include <phase2.h>
+#include <phase3.h>
+#include <phase4.h>
+#include <phase5.h>
+#include "syscallHandlers.h"
+#include "phase5utility.h"
+
 /*
  * Sets the current process into user mode. Requires the process to currently
  * be in kernel mode. Also enables interrupts.

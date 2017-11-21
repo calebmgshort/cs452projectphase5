@@ -1,3 +1,14 @@
+#include <usloss.h>
+#include <usyscall.h>
+#include <assert.h>
+#include <phase1.h>
+#include <phase2.h>
+#include <phase3.h>
+#include <phase4.h>
+#include <phase5.h>
+#include "syscallHandlers.h"
+#include "phase5utility.h"
+
 void mboxCreate(USLOSS_Sysargs *args)
 {
     if (args->number != SYS_MBOXCREATE)
@@ -99,7 +110,7 @@ void mboxReceive(USLOSS_Sysargs *args)
     int mboxID = (int) ((long) args->arg1);
     void *msgPtr = (void *) args->arg2;
     int msgSize = (int) ((long) args->arg3);
-    int result = MboxReceive(mboxId, msgPtr, msgSize);
+    int result = MboxReceive(mboxID, msgPtr, msgSize);
     if (result < 0)
     {
         args->arg4 = (void *) -1;
@@ -108,7 +119,7 @@ void mboxReceive(USLOSS_Sysargs *args)
     {
         args->arg4 = (void *) 0;
     }
-    setUserMode();
+    setToUserMode();
 }
 
 void mboxCondReceive(USLOSS_Sysargs *args)

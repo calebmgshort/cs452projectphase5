@@ -1,13 +1,15 @@
 #PREFIX = ${HOME}
 #PREFIX = /home/theimbichner/Csc452Project/
+#LDFLAGS += -L. -L./libraries/linux -L${PREFIX}/lib
 PREFIX = /Users/Caleb/Documents/ComputerScience/csc452/project/compilefolder
+LDFLAGS += -L. -L./libraries/osx -L${PREFIX}/lib
 
 TARGET = libphase5.a
 ASSIGNMENT = 452phase5
 CC = gcc
 AR = ar
 
-COBJS = phase5.o p1.o libuser5.o
+COBJS = phase5.o p1.o libuser5.o syscallHandlers.o phase5utility.o
 CSRCS = ${COBJS:.o=.c}
 
 PHASE1LIB = patrickphase1
