@@ -1,6 +1,5 @@
 /*
  * phase5.c
- *
  */
 #include <usloss.h>
 #include <usyscall.h>
@@ -25,6 +24,7 @@ FaultMsg faults[MAXPROC]; /* Note that a process can have only
                            * and index them by pid. */
 VmStats  vmStats;
 void * vmRegion;
+int FaultsMbox;
 
 static void FaultHandler(int type, void * offset);
 
@@ -64,64 +64,22 @@ int start4(char *arg)
     /* user-process access to VM functions */
     systemCallVec[SYS_VMINIT]    = vmInit;
     systemCallVec[SYS_VMDESTROY] = vmDestroy;
-    result = Spawn("Start5", start5, NULL, 8*USLOSS_MIN_STACK, 2, &pid);
-    if (result != 0) {
+    result = Spawn("Start5", start5, NULL, 8 * USLOSS_MIN_STACK, 2, &pid);
+    if (result != 0)
+    {
         USLOSS_Console("start4(): Error spawning start5\n");
         Terminate(1);
     }
     result = Wait(&pid, &status);
-    if (result != 0) {
+    if (result != 0)
+    {
         USLOSS_Console("start4(): Error waiting for start5\n");
         Terminate(1);
     }
     Terminate(0);
-    return 0; // not reached
+    return 0;
 
 } /* start4 */
-
-/*
- *----------------------------------------------------------------------
- *
- * VmInit --
- *
- * Stub for the VmInit system call.
- *
- * Results:
- *      None.
- *
- * Side effects:
- *      VM system is initialized.
- *
- *----------------------------------------------------------------------
- */
-static void vmInit(USLOSS_Sysargs *USLOSS_SysargsPtr)
-{
-    CheckMode();
-} /* vmInit */
-
-
-/*
- *----------------------------------------------------------------------
- *
- * vmDestroy --
- *
- * Stub for the VmDestroy system call.
- *
- * Results:
- *      None.
- *
- * Side effects:
- *      VM system is cleaned up.
- *
- *----------------------------------------------------------------------
- */
-
-static void
-vmDestroy(USLOSS_Sysargs *USLOSS_SysargsPtr)
-{
-   CheckMode();
-} /* vmDestroy */
-
 
 /*
  *----------------------------------------------------------------------
@@ -140,45 +98,53 @@ vmDestroy(USLOSS_Sysargs *USLOSS_SysargsPtr)
  *
  *----------------------------------------------------------------------
  */
-void *
-vmInitReal(int mappings, int pages, int frames, int pagers)
+void *vmInitReal(int mappings, int pages, int frames, int pagers)
 {
-   int status;
+    CheckMode();
+
+    // Check args
+    if (mappings < 0 || pages < 0 || frames < 0 || pagers < 0)
+    {
+        return (void *) -1;
+    }
+    if (mappings != pages)
+    {
+        return (void *) -1;
+    }
+
+    // Init the Mmu
+    int status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
+    if (status != USLOSS_MMU_OK)
+    {
+       USLOSS_Console("vmInitReal: couldn't initialize MMU, status %d\n", status);
+       USLOSS_Halt(1);
+    }
+    USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
+
+    /*
+     * Initialize page tables.
+     */
+
+    // Create the fault mailbox.
+    FaultsMbox = MboxCreate(MAXPROC, MAX_MESSAGE);
+
+    /*
+     * Fork the pagers.
+     */
+    for (int i = 0; i < pagers; i++)
+    {
+        // TODO fork pagers
+    }
+
+    // Zero out, then initialize, the vmStats structure
+    memset((char *) &vmStats, 0, sizeof(VmStats));
+    vmStats.pages = pages;
+    vmStats.frames = frames;
+    // TODO init vmStats
+
    int dummy;
-
-   CheckMode();
-   status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
-   if (status != USLOSS_MMU_OK) {
-      USLOSS_Console("vmInitReal: couldn't initialize MMU, status %d\n", status);
-      abort();
-   }
-   USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
-
-   /*
-    * Initialize page tables.
-    */
-
-   /*
-    * Create the fault mailbox.
-    */
-
-   /*
-    * Fork the pagers.
-    */
-
-   /*
-    * Zero out, then initialize, the vmStats structure
-    */
-   memset((char *) &vmStats, 0, sizeof(VmStats));
-   vmStats.pages = pages;
-   vmStats.frames = frames;
-   /*
-    * Initialize other vmStats fields.
-    */
-
    return USLOSS_MmuRegion(&dummy);
 } /* vmInitReal */
-
 
 /*
  *----------------------------------------------------------------------
@@ -195,8 +161,7 @@ vmInitReal(int mappings, int pages, int frames, int pagers)
  *
  *----------------------------------------------------------------------
  */
-void
-PrintStats(void)
+void PrintStats(void)
 {
      USLOSS_Console("VmStats\n");
      USLOSS_Console("pages:          %d\n", vmStats.pages);
@@ -211,7 +176,6 @@ PrintStats(void)
      USLOSS_Console("pageOuts:       %d\n", vmStats.pageOuts);
      USLOSS_Console("replaced:       %d\n", vmStats.replaced);
 } /* PrintStats */
-
 
 /*
  *----------------------------------------------------------------------
@@ -229,8 +193,7 @@ PrintStats(void)
  *
  *----------------------------------------------------------------------
  */
-void
-vmDestroyReal(void)
+void vmDestroyReal(void)
 {
 
    CheckMode();
@@ -248,7 +211,7 @@ vmDestroyReal(void)
    /* and so on... */
 
 } /* vmDestroyReal */
-
+
 /*
  *----------------------------------------------------------------------
  *
@@ -266,13 +229,10 @@ vmDestroyReal(void)
  *
  *----------------------------------------------------------------------
  */
-static void FaultHandler(int type /* MMU_INT */,
-             void* offset /* Offset within VM region */)
+static void FaultHandler(int type, void* offset)
 {
-   int cause;
-
    assert(type == USLOSS_MMU_INT);
-   cause = USLOSS_MmuGetCause();
+   int cause = USLOSS_MmuGetCause();
    assert(cause == USLOSS_MMU_FAULT);
    vmStats.faults++;
    /*
@@ -280,7 +240,6 @@ static void FaultHandler(int type /* MMU_INT */,
     * reply.
     */
 } /* FaultHandler */
-
 
 /*
  *----------------------------------------------------------------------

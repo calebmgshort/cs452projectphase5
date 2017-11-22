@@ -10,6 +10,35 @@
 #include "phase5utility.h"
 #include "vm.h"
 
+void vmInit(USLOSS_Sysargs *args)
+{
+    CheckMode();
+    if (args->number != SYS_VMINIT)
+    {
+        USLOSS_Console("vmInit(): Called with wrong syscall number.\n");
+        USLOSS_Halt(1);
+    }
+    int mappings = (int) ((long) args->arg1);
+    int pages = (int) ((long) args->arg2);
+    int frames = (int) ((long) args->arg3);
+    int pagers = (int) ((long) args->arg4);
+    void *result = vmInitReal(mappings, pages, frames, pagers);
+    // TODO output
+    setToUserMode();
+}
+
+void vmDestroy(USLOSS_Sysargs *args)
+{
+    CheckMode();
+    if (args->number != SYS_VMDESTROY)
+    {
+        USLOSS_Console("vmDestroy(): Called with wrong syscall number.\n");
+        USLOSS_Halt(1);
+    }
+    vmDestroyReal();
+    setToUserMode();
+}
+
 void mboxCreate(USLOSS_Sysargs *args)
 {
     CheckMode();
