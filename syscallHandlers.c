@@ -8,9 +8,11 @@
 #include <phase5.h>
 #include "syscallHandlers.h"
 #include "phase5utility.h"
+#include "vm.h"
 
 void mboxCreate(USLOSS_Sysargs *args)
 {
+    CheckMode();
     if (args->number != SYS_MBOXCREATE)
     {
         USLOSS_Console("mboxCreate(): Called with wrong syscall number.\n");
@@ -34,6 +36,7 @@ void mboxCreate(USLOSS_Sysargs *args)
 
 void mboxRelease(USLOSS_Sysargs *args)
 {
+    CheckMode();
     if (args->number != SYS_MBOXRELEASE)
     {
         USLOSS_Console("mboxRelease(): Called with wrong syscall number.\n");
@@ -54,6 +57,7 @@ void mboxRelease(USLOSS_Sysargs *args)
 
 void mboxSend(USLOSS_Sysargs *args)
 {
+    CheckMode();
     if (args->number != SYS_MBOXSEND)
     {
         USLOSS_Console("mboxSend(): Called with wrong syscall number.\n");
@@ -76,6 +80,7 @@ void mboxSend(USLOSS_Sysargs *args)
 
 void mboxCondSend(USLOSS_Sysargs *args)
 {
+    CheckMode();
     if (args->number != SYS_MBOXCONDSEND)
     {
         USLOSS_Console("mboxCondSend(): Called with wrong syscall number.\n");
@@ -102,6 +107,7 @@ void mboxCondSend(USLOSS_Sysargs *args)
 
 void mboxReceive(USLOSS_Sysargs *args)
 {
+    CheckMode();
     if (args->number != SYS_MBOXRECEIVE)
     {
         USLOSS_Console("mboxReceive(): Called with wrong syscall number.\n");
@@ -124,6 +130,7 @@ void mboxReceive(USLOSS_Sysargs *args)
 
 void mboxCondReceive(USLOSS_Sysargs *args)
 {
+    CheckMode();
     if (args->number != SYS_MBOXCONDRECEIVE)
     {
         USLOSS_Console("mboxCondReceive(): Called with wrong syscall number.\n");
@@ -145,5 +152,5 @@ void mboxCondReceive(USLOSS_Sysargs *args)
     {
         args->arg4 = (void *) 0;
     }
-    setUserMode();
+    setToUserMode();
 }

@@ -1,11 +1,7 @@
 /*
  * phase5.c
  *
- * This is a skeleton for phase5 of the programming assignment. It
- * doesn't do much -- it is just intended to get you started.
  */
-
-
 #include <usloss.h>
 #include <usyscall.h>
 #include <assert.h>
@@ -21,13 +17,14 @@
 #include "syscallHandlers.h"
 #include "phase5utility.h"
 
-static Process processes[MAXPROC];
+static Process ProcTable[MAXPROC];
 
 FaultMsg faults[MAXPROC]; /* Note that a process can have only
                            * one fault at a time, so we can
                            * allocate the messages statically
                            * and index them by pid. */
 VmStats  vmStats;
+void * vmRegion;
 
 static void FaultHandler(int type, void * offset);
 
@@ -97,8 +94,7 @@ int start4(char *arg)
  *
  *----------------------------------------------------------------------
  */
-static void
-vmInit(USLOSS_Sysargs *USLOSS_SysargsPtr)
+static void vmInit(USLOSS_Sysargs *USLOSS_SysargsPtr)
 {
     CheckMode();
 } /* vmInit */
