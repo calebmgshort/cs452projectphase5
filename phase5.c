@@ -29,8 +29,6 @@ int FaultsMbox;
 
 static void FaultHandler(int type, void * offset);
 
-static void vmInit(USLOSS_Sysargs *USLOSS_SysargsPtr);
-static void vmDestroy(USLOSS_Sysargs *USLOSS_SysargsPtr);
 static void PrintStats();
 
 extern int start5(char *);

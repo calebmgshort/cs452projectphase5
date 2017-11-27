@@ -1,9 +1,10 @@
 #!/bin/ksh
-dir=/home/cs452/fall17/phase5/testResults
+#dir=/home/cs452/fall17/phase5/testResults
 #dir=/home/cs452/fall17/admin/project/phase5/testResults
 #dir=/Users/patrick/Classes/452/project/phase5/testResults
+dir=./testResults
 
-if [ "$#" -eq 0 ] 
+if [ "$#" -eq 0 ]
 then
     echo "Usage: ksh testphase5.ksh <num>"
     echo "where <num> is 1, 2, ... or 8"
@@ -21,7 +22,7 @@ fi
 cp testcases/disk0.orig disk0
 cp testcases/disk1.orig disk1
 
-if  make simple${num} 
+if  make simple${num}
 then
 
     ./simple${num} > simple${num}.txt 2> simple${num}stderr.txt;
