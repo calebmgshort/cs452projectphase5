@@ -17,17 +17,12 @@
 #include "phase5utility.h"
 
 static Process ProcTable[MAXPROC];
-
-FaultMsg faults[MAXPROC]; /* Note that a process can have only
-                           * one fault at a time, so we can
-                           * allocate the messages statically
-                           * and index them by pid. */
+FaultMsg faults[MAXPROC];
 VmStats  vmStats;
-void * vmRegion;
+void *vmRegion;
 int FaultsMbox;
 
-static void FaultHandler(int type, void * offset);
-
+static void FaultHandler(int type, void *offset);
 extern int start5(char *);
 
 /*
@@ -47,10 +42,6 @@ extern int start5(char *);
  */
 int start4(char *arg)
 {
-    int pid;
-    int result;
-    int status;
-
     /* to get user-process access to mailbox functions */
     systemCallVec[SYS_MBOXCREATE]      = mboxCreate;
     systemCallVec[SYS_MBOXRELEASE]     = mboxRelease;
@@ -62,12 +53,15 @@ int start4(char *arg)
     /* user-process access to VM functions */
     systemCallVec[SYS_VMINIT]    = vmInit;
     systemCallVec[SYS_VMDESTROY] = vmDestroy;
-    result = Spawn("Start5", start5, NULL, 8 * USLOSS_MIN_STACK, 2, &pid);
+
+    int pid;
+    int result = Spawn("Start5", start5, NULL, 8 * USLOSS_MIN_STACK, 2, &pid);
     if (result != 0)
     {
         USLOSS_Console("start4(): Error spawning start5\n");
         Terminate(1);
     }
+    int status;
     result = Wait(&pid, &status);
     if (result != 0)
     {
@@ -76,7 +70,6 @@ int start4(char *arg)
     }
     Terminate(0);
     return 0;
-
 } /* start4 */
 
 /*
@@ -106,6 +99,10 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
         return (void *) -1;
     }
     if (mappings != pages)
+    {
+        return (void *) -1;
+    }
+    if (pagers > MAXPAGERS)
     {
         return (void *) -1;
     }
@@ -234,6 +231,7 @@ static void FaultHandler(int type, void* offset)
     * Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
     * reply.
     */
+
 } /* FaultHandler */
 
 /*
