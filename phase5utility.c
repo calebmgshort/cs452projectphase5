@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "phase2.h"
+#include "phase5.h"
 #include "syscallHandlers.h"
 #include "phase5utility.h"
 #include "vm.h"
@@ -41,4 +42,27 @@ void unlockMutex(int mbox)
 {
     CheckMode();
     MboxReceive(mbox, NULL, 0);
+}
+
+void initVmStats(VmStats *vmStats, int pages, int frames)
+{
+    // TODO any nonzero fields
+    CheckMode();
+
+    vmStats->pages = pages;
+    vmStats->frames = frames;
+    int sector;
+    int track;
+    int disk;
+    diskSizeReal(1, &sector, &track, &disk);
+    int diskSize = disk * track * sector;
+    vmStats->diskBlocks = diskSize/USLOSS_MmuPageSize();
+    vmStats->freeFrames = frames;
+    vmStats->freeDiskBlocks = blocks;
+    vmStats->switches = 0;
+    vmStats->faults = 0;
+    vmStats->new = 0;
+    vmStats->pageIns = 0;
+    vmStats->pageOuts = 0;
+    vmStats->replaced = 0;
 }

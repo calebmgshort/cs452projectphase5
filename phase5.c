@@ -121,8 +121,8 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
 
     // Initial testing
     status = USLOSS_MmuMap(TAG, 0, 0, USLOSS_MMU_PROT_RW);
-    vmStats.faults = 1;
-    if(status == USLOSS_MMU_ERR_REMAP){
+    if(status == USLOSS_MMU_ERR_REMAP)
+    {
         USLOSS_Console("Could not map page 0 to frame 0\n");
     }
 
@@ -142,13 +142,12 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     }
 
     // Zero out, then initialize, the vmStats structure
-    memset((char *) &vmStats, 0, sizeof(VmStats));
-    vmStats.pages = pages;
-    vmStats.frames = frames;
-    // TODO init vmStats
+    initVmStats(&vmStats, pages, frames);
+    vmStats.faults = 1;
+    vmStats.new = 1;
 
-   int dummy;
-   return USLOSS_MmuRegion(&dummy);
+    int dummy;
+    return USLOSS_MmuRegion(&dummy);
 } /* vmInitReal */
 
 /*
@@ -206,11 +205,7 @@ void vmDestroyReal(void)
      * Kill the pagers here.
      */
     // Print vm statistics.
-    USLOSS_Console("vmStats:\n");
-    USLOSS_Console("pages: %d\n", vmStats.pages);
-    USLOSS_Console("frames: %d\n", vmStats.frames);
-    //USLOSS_Console("blocks: %d\n", vmStats.blocks);
-    /* and so on... */
+    PrintStats();
 
 } /* vmDestroyReal */
 
