@@ -11,6 +11,9 @@
 #include "vm.h"
 #include "providedPrototypes.h"
 
+extern void *vmInitReal(int, int, int, int);
+extern void vmDestroyReal();
+
 void vmInit(USLOSS_Sysargs *args)
 {
     CheckMode();

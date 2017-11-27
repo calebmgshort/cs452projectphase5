@@ -34,6 +34,7 @@ static void vmDestroy(USLOSS_Sysargs *USLOSS_SysargsPtr);
 static void PrintStats();
 
 extern int start5(char *);
+
 /*
  *----------------------------------------------------------------------
  *
@@ -203,20 +204,17 @@ void PrintStats(void)
  */
 void vmDestroyReal(void)
 {
-
-   CheckMode();
-   USLOSS_MmuDone();
-   /*
-    * Kill the pagers here.
-    */
-   /*
-    * Print vm statistics.
-    */
-   USLOSS_Console("vmStats:\n");
-   USLOSS_Console("pages: %d\n", vmStats.pages);
-   USLOSS_Console("frames: %d\n", vmStats.frames);
-   //USLOSS_Console("blocks: %d\n", vmStats.blocks);
-   /* and so on... */
+    CheckMode();
+    int result = USLOSS_MmuDone();
+    /*
+     * Kill the pagers here.
+     */
+    // Print vm statistics.
+    USLOSS_Console("vmStats:\n");
+    USLOSS_Console("pages: %d\n", vmStats.pages);
+    USLOSS_Console("frames: %d\n", vmStats.frames);
+    //USLOSS_Console("blocks: %d\n", vmStats.blocks);
+    /* and so on... */
 
 } /* vmDestroyReal */
 
@@ -264,10 +262,10 @@ static void FaultHandler(int type, void* offset)
  *
  *----------------------------------------------------------------------
  */
-static int
-Pager(char *buf)
+static int Pager(char *arg)
 {
-    while(1) {
+    while (1)
+    {
         /* Wait for fault to occur (receive from mailbox) */
         /* Look for free frame */
         /* If there isn't one then use clock algorithm to

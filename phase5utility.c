@@ -1,11 +1,9 @@
 #include <usloss.h>
 #include <usyscall.h>
 #include <assert.h>
-#include <phase1.h>
-#include <phase2.h>
-#include <phase3.h>
-#include <phase4.h>
-#include <phase5.h>
+#include <stdlib.h>
+
+#include "phase2.h"
 #include "syscallHandlers.h"
 #include "phase5utility.h"
 #include "vm.h"
