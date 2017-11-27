@@ -20,6 +20,7 @@
 static Process ProcTable[MAXPROC];
 FaultMsg faults[MAXPROC];
 VmStats  vmStats;
+int vmStatsMutex;
 void *vmRegion;
 int FaultsMbox;
 
@@ -167,18 +168,20 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
  */
 void PrintStats(void)
 {
-     USLOSS_Console("VmStats\n");
-     USLOSS_Console("pages:          %d\n", vmStats.pages);
-     USLOSS_Console("frames:         %d\n", vmStats.frames);
-     USLOSS_Console("diskBlocks:     %d\n", vmStats.diskBlocks);
-     USLOSS_Console("freeFrames:     %d\n", vmStats.freeFrames);
-     USLOSS_Console("freeDiskBlocks: %d\n", vmStats.freeDiskBlocks);
-     USLOSS_Console("switches:       %d\n", vmStats.switches);
-     USLOSS_Console("faults:         %d\n", vmStats.faults);
-     USLOSS_Console("new:            %d\n", vmStats.new);
-     USLOSS_Console("pageIns:        %d\n", vmStats.pageIns);
-     USLOSS_Console("pageOuts:       %d\n", vmStats.pageOuts);
-     USLOSS_Console("replaced:       %d\n", vmStats.replaced);
+    lockMutex(vmStatsMutex);
+    USLOSS_Console("VmStats\n");
+    USLOSS_Console("pages:          %d\n", vmStats.pages);
+    USLOSS_Console("frames:         %d\n", vmStats.frames);
+    USLOSS_Console("diskBlocks:     %d\n", vmStats.diskBlocks);
+    USLOSS_Console("freeFrames:     %d\n", vmStats.freeFrames);
+    USLOSS_Console("freeDiskBlocks: %d\n", vmStats.freeDiskBlocks);
+    USLOSS_Console("switches:       %d\n", vmStats.switches);
+    USLOSS_Console("faults:         %d\n", vmStats.faults);
+    USLOSS_Console("new:            %d\n", vmStats.new);
+    USLOSS_Console("pageIns:        %d\n", vmStats.pageIns);
+    USLOSS_Console("pageOuts:       %d\n", vmStats.pageOuts);
+    USLOSS_Console("replaced:       %d\n", vmStats.replaced);
+    unlockMutex(vmStatsMutex);
 } /* PrintStats */
 
 /*

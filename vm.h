@@ -46,4 +46,6 @@ typedef struct FaultMsg {
     // Add more stuff here.
 } FaultMsg;
 
+extern int vmStatsMutex;
+
 #define CheckMode() assert(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)

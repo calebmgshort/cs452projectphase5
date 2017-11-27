@@ -44,9 +44,10 @@ void unlockMutex(int mbox)
     MboxReceive(mbox, NULL, 0);
 }
 
+extern void diskSizeReal(int, int *, int *, int *);
 void initVmStats(VmStats *vmStats, int pages, int frames)
 {
-    // TODO any nonzero fields
+    vmStatsMutex = createMutex();
     CheckMode();
 
     vmStats->pages = pages;
@@ -58,7 +59,7 @@ void initVmStats(VmStats *vmStats, int pages, int frames)
     int diskSize = disk * track * sector;
     vmStats->diskBlocks = diskSize/USLOSS_MmuPageSize();
     vmStats->freeFrames = frames;
-    vmStats->freeDiskBlocks = blocks;
+    vmStats->freeDiskBlocks = vmStats->diskBlocks;
     vmStats->switches = 0;
     vmStats->faults = 0;
     vmStats->new = 0;

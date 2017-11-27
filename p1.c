@@ -1,6 +1,6 @@
 #include <usloss.h>
-
-extern int debugflag4;
+#include <usyscall.h>
+#include "phase5.h"
 
 void
 p1_fork(int pid)
@@ -12,6 +12,7 @@ p1_fork(int pid)
 void
 p1_switch(int old, int new)
 {
+    vmStats.switches++;
     //if (DEBUG4 && debugflag4)
 //        USLOSS_Console("p1_switch() called: old = %d, new = %d\n", old, new);
 } /* p1_switch */
