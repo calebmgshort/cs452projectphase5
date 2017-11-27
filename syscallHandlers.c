@@ -9,6 +9,7 @@
 #include "syscallHandlers.h"
 #include "phase5utility.h"
 #include "vm.h"
+#include "providedPrototypes.h"
 
 void vmInit(USLOSS_Sysargs *args)
 {
