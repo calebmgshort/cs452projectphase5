@@ -9,6 +9,7 @@
 #include "syscallHandlers.h"
 #include "phase5utility.h"
 #include "vm.h"
+#include "providedPrototypes.h"
 
 extern void *vmInitReal(int, int, int, int);
 extern void vmDestroyReal();

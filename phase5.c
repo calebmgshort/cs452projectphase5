@@ -15,6 +15,7 @@
 
 #include "syscallHandlers.h"
 #include "phase5utility.h"
+#include "providedPrototypes.h"
 
 static Process ProcTable[MAXPROC];
 FaultMsg faults[MAXPROC];
@@ -23,6 +24,8 @@ void *vmRegion;
 int FaultsMbox;
 
 static void FaultHandler(int type, void *offset);
+static void PrintStats();
+
 extern int start5(char *);
 
 /*
@@ -115,6 +118,12 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
        USLOSS_Halt(1);
     }
     USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
+
+    // Initial testing
+    status = USLOSS_MmuMap(TAG, 0, 0, USLOSS_MMU_PROT_RW);
+    if(status == USLOSS_MMU_ERR_REMAP){
+        USLOSS_Console("Could not map page 0 to frame 0\n");
+    }
 
     /*
      * Initialize page tables.
