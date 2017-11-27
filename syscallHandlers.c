@@ -10,6 +10,9 @@
 #include "phase5utility.h"
 #include "vm.h"
 
+extern void *vmInitReal(int, int, int, int);
+extern void vmDestroyReal();
+
 void vmInit(USLOSS_Sysargs *args)
 {
     CheckMode();
