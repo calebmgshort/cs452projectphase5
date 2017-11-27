@@ -28,6 +28,17 @@ void vmInit(USLOSS_Sysargs *args)
     int pagers = (int) ((long) args->arg4);
     void *result = vmInitReal(mappings, pages, frames, pagers);
     // TODO output
+    if ((long) result <= 0)
+    {
+        args->arg1 = NULL;
+        args->arg4 = result;
+    }
+    else
+    {
+        args->arg1 = result;
+        args->arg4 = 0;
+    }
+
     setToUserMode();
 }
 

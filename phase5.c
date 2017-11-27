@@ -121,6 +121,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
 
     // Initial testing
     status = USLOSS_MmuMap(TAG, 0, 0, USLOSS_MMU_PROT_RW);
+    vmStats.faults = 1;
     if(status == USLOSS_MMU_ERR_REMAP){
         USLOSS_Console("Could not map page 0 to frame 0\n");
     }
