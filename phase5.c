@@ -17,6 +17,9 @@
 #include "phase5utility.h"
 #include "providedPrototypes.h"
 
+// Debugging flag
+int debugflag5 = 0;
+
 static Process ProcTable[MAXPROC];
 FaultMsg faults[MAXPROC];
 VmStats  vmStats;
@@ -26,8 +29,9 @@ int NumPagers;
 int PagerPIDs[MAXPAGERS];
 void *vmRegion;
 int FaultsMbox;
+int PagerPIDs[MAXPAGERS];
 
-static void FaultHandler(int type, void *offset);
+static void FaultHandler(int, void *);
 static void PrintStats();
 static int Pager(char *);
 
@@ -50,6 +54,11 @@ extern int start5(char *);
  */
 int start4(char *arg)
 {
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("start4(): called.\n");
+    }
+
     /* to get user-process access to mailbox functions */
     systemCallVec[SYS_MBOXCREATE]      = mboxCreate;
     systemCallVec[SYS_MBOXRELEASE]     = mboxRelease;
@@ -99,6 +108,11 @@ int start4(char *arg)
  */
 void *vmInitReal(int mappings, int pages, int frames, int pagers)
 {
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("vmInitReal(): called.\n");
+    }
+
     CheckMode();
 
     // Check args
@@ -119,7 +133,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     int status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
     if (status != USLOSS_MMU_OK)
     {
-       USLOSS_Console("vmInitReal: couldn't initialize MMU, status %d\n", status);
+       USLOSS_Console("vmInitReal(): couldn't initialize MMU, status %d\n", status);
        USLOSS_Halt(1);
     }
     USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
@@ -128,7 +142,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     status = USLOSS_MmuMap(TAG, 0, 0, USLOSS_MMU_PROT_RW);
     if(status == USLOSS_MMU_ERR_REMAP)
     {
-        USLOSS_Console("Could not map page 0 to frame 0\n");
+        USLOSS_Console("vmInitReal(): Could not map page 0 to frame 0\n");
     }
 
     /*
@@ -146,18 +160,20 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     NumPagers = pagers; 
     for (int i = 0; i < pagers; i++)
     {
-        PagerPIDs[i] = fork1("Pager", Pager, "", USLOSS_MIN_STACK, 2);
-        if (PagerPIDs[i] < 0)
+        PagerPIDs[i] = fork1("Pager", Pager, NULL, USLOSS_MIN_STACK, 2);
+        if(PagerPIDs[i] < 0)
         {
-            USLOSS_Console("Could not fork pager daemon.  Halting...\n");
-            USLOSS_Halt(1);
+          USLOSS_Console("vmInitReal(): Can't create Pager %d\n", i);
+          USLOSS_Halt(1);
         }
+    }
+    for (int i = pagers; i < MAXPAGERS; i++)
+    {
+      PagerPIDs[i] = -1;
     }
 
     // Zero out, then initialize, the vmStats structure
     initVmStats(&vmStats, pages, frames);
-    vmStats.faults = 1;
-    vmStats.new = 1;
 
     int dummy;
     return USLOSS_MmuRegion(&dummy);
@@ -214,8 +230,14 @@ void PrintStats(void)
  */
 void vmDestroyReal()
 {
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("vmDestroyReal(): called.\n");
+    }
+
     CheckMode();
     int result = USLOSS_MmuDone();
+    
     /*
      * Kill the pagers here.
      */
@@ -224,9 +246,18 @@ void vmDestroyReal()
         unlockMutex(tempPagerBlock);
         zap(PagerPIDs[i]);
     }
+    
+    if(result != USLOSS_MMU_OK)
+    {
+        USLOSS_Console("vmDestroyReal(): Result of MMuDone is not OK: %d.\n", result);
+    }
+
 
     // Print vm statistics.
     PrintStats();
+
+    //TODO: Free any allocated memory
+
 
 } /* vmDestroyReal */
 
@@ -249,14 +280,24 @@ void vmDestroyReal()
  */
 static void FaultHandler(int type, void* offset)
 {
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("FaultHandler(): called.\n");
+    }
+
    assert(type == USLOSS_MMU_INT);
    int cause = USLOSS_MmuGetCause();
    assert(cause == USLOSS_MMU_FAULT);
    vmStats.faults++;
    /*
-    * Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
+    * TODO: Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
     * reply.
     */
+   FaultMsg currentMsg = faults[getpid()%MAXPROC];
+   currentMsg.addr = offset;
+   currentMsg.pid = getpid()%MAXPROC;
+   currentMsg.replyMbox = NULL;   // TODO: change
+
 
 } /* FaultHandler */
 

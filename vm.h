@@ -2,6 +2,7 @@
  * vm.h
  */
 
+#define DEBUG5 1
 
 /*
  * All processes use the same tag.
