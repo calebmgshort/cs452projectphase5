@@ -20,16 +20,22 @@
 // Debugging flag
 int debugflag5 = 0;
 
+// Process info
 Process ProcTable[MAXPROC];
 FaultMsg faults[MAXPROC];
-VmStats  vmStats;
+
+// Vm Stats
+VmStats vmStats;
 int vmStatsMutex;
-int tempPagerBlock;
+
+// Pager info
 int NumPagers;
 int PagerPIDs[MAXPAGERS];
-void *vmRegion;
 int FaultsMbox;
-int PagerPIDs[MAXPAGERS];
+int destroySem;
+
+// Start of the Vm Region
+void *vmRegion;
 
 static void FaultHandler(int, void *);
 static void PrintStats();
@@ -145,25 +151,20 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     }
     USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
 
-    // Initial testing
-    status = USLOSS_MmuMap(TAG, 0, 0, USLOSS_MMU_PROT_RW);
-    if(status == USLOSS_MMU_ERR_REMAP)
-    {
-        USLOSS_Console("vmInitReal(): Could not map page 0 to frame 0\n");
-    }
-
     /*
      * Initialize page tables.
      */
 
     // Create the fault mailbox.
     FaultsMbox = MboxCreate(MAXPROC, MAX_MESSAGE);
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("vmInitReal(): FaultsMbox created as %d\n", FaultsMbox);
+    }
 
     /*
      * Fork the pagers.
      */
-    tempPagerBlock = createMutex();
-    lockMutex(tempPagerBlock);
     NumPagers = pagers;
     for (int i = 0; i < pagers; i++)
     {
@@ -217,6 +218,11 @@ void PrintStats(void)
     USLOSS_Console("pageOuts:       %d\n", vmStats.pageOuts);
     USLOSS_Console("replaced:       %d\n", vmStats.replaced);
     unlockMutex(vmStatsMutex);
+
+    if (DEBUG5 && debugflag5)
+    {
+        dumpProcesses();
+    }
 } /* PrintStats */
 
 /*
@@ -248,13 +254,15 @@ void vmDestroyReal()
     /*
      * Kill the pagers here.
      */
+    destroySem = semcreateReal(0);
     for (int i = 0; i < NumPagers; i++)
     {
-        unlockMutex(tempPagerBlock);
-        zap(PagerPIDs[i]);
+        int kill = -1;
+        MboxSend(FaultsMbox, &kill, sizeof(int));
+        sempReal(destroySem);
     }
 
-    if(result != USLOSS_MMU_OK)
+    if (result != USLOSS_MMU_OK)
     {
         USLOSS_Console("vmDestroyReal(): Result of MMuDone is not OK: %d.\n", result);
     }
@@ -292,32 +300,42 @@ static void FaultHandler(int type, void* offset)
         USLOSS_Console("FaultHandler(): called.\n");
     }
 
-   assert(type == USLOSS_MMU_INT);
-   int cause = USLOSS_MmuGetCause();
-   assert(cause == USLOSS_MMU_FAULT);
-   vmStats.faults++;
+    assert(type == USLOSS_MMU_INT);
+    int cause = USLOSS_MmuGetCause();
+    assert(cause == USLOSS_MMU_FAULT);
+    vmStats.faults++;
 
-   /*
-    * Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
-    * reply.
-    */
-   FaultMsg* currentMsgPtr = &faults[getpid()%MAXPROC];
-   currentMsgPtr->addr = offset;
-   currentMsgPtr->pid = getpid();
-   currentMsgPtr->replyMbox = FaultsMbox;
-   // Send to pagers
-   int result = MboxSend(currentMsgPtr->replyMbox, NULL, 0);
-   if(result != 0)
-   {
-      USLOSS_Console("FaultHandler(): MboxSend failed.\n");
-   }
-   // Wait for reply
-   Process proc = ProcTable[getpid() % MAXPROC];
-   MboxReceive(proc.privateMboxID, NULL, 0);
-   if(result != 0)
-   {
-      USLOSS_Console("FaultHandler(): MboxReceive failed.\n");
-   }
+    /*
+     * Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
+     * reply.
+     */
+    FaultMsg* currentMsgPtr = &faults[getpid()%MAXPROC];
+    currentMsgPtr->addr = offset;
+    currentMsgPtr->pid = getpid();
+    currentMsgPtr->replyMbox = FaultsMbox; // TODO figure this out
+    
+    // Send to pagers
+    int pid = getpid();
+    int result = MboxSend(FaultsMbox, &pid, sizeof(int));
+    if (result != 0)
+    {
+        USLOSS_Console("FaultHandler(): MboxSend failed.\n");
+    }
+
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("FaultHandler(): Waiting for Pager.\n");
+    }
+
+    // Wait for reply
+    semPProc();
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("FaultHandler(): Returned from page fault.\n");
+    }
+
+    // Enable interrupts
+    enableInterrupts();
 } /* FaultHandler */
 
 /*
@@ -341,27 +359,56 @@ static int Pager(char *arg)
     {
         USLOSS_Console("Pager(): called.\n");
     }
-    //lockMutex(tempPagerBlock);
     while (1)
     {
+        if (isZapped())
+        {
+            break;
+        }
+
+        // Wait for fault to occur (receive from mailbox)
+        int pid;
+        int result = MboxReceive(FaultsMbox, &pid, sizeof(int));
+        if (result < 0)
+        {
+           USLOSS_Console("Pager(): MboxReceive failed with error code %d.\n", result);
+           break;
+        }
+        if (pid < 0)
+        {
+            break;
+        }
+
+        // Get the fault info from the array
+        FaultMsg* fault = &faults[pid];
+        int pageNum = (int) ((long) fault->addr / USLOSS_MmuPageSize());
         if (DEBUG5 && debugflag5)
         {
-            USLOSS_Console("Pager(): Another loop iteration.\n");
+            USLOSS_Console("Pager(): Page number %d.\n", pageNum);
         }
-        //break;
+        // Check if page is new TODO
+        vmStats.new++;
 
-        /* Wait for fault to occur (receive from mailbox) */
-        int result = MboxReceive(FaultsMbox, NULL, 0);
-        if(result != 0)
+        // Perform the mapping
+        result = USLOSS_MmuMap(TAG, pageNum, pageNum, USLOSS_MMU_PROT_RW); // TODO move to fault handler
+        if (result != USLOSS_MMU_OK)
         {
-           USLOSS_Console("FaultHandler(): MboxReceive failed.\n");
+            USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
+            USLOSS_Halt(1);
         }
-        // TODO: continue here
+
+        // Initialize the frame to match the page TODO read from disk
+        memset(vmRegion + pageNum * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
+
+        // Unblock the waiting process
+        semVProc(pid);
+
+        // TODO
         /* Look for free frame */
         /* If there isn't one then use clock algorithm to
          * replace a page (perhaps write to disk) */
         /* Load page into frame from disk, if necessary */
-        /* Unblock waiting (faulting) process */
     }
+    semvReal(destroySem);
     return 0;
 } /* Pager */

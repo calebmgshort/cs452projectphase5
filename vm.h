@@ -1,6 +1,8 @@
 /*
  * vm.h
  */
+#ifndef _VM_H
+#define _VM_H
 
 #define DEBUG5 1
 
@@ -33,7 +35,7 @@ typedef struct PTE {
 typedef struct Process {
     int  numPages;          // Size of the page table.
     PTE  *pageTable;        // The page table for the process.
-    int   privateMboxID;    // The id of the private mailbox used to block this process
+    int   privateSem;       // The id of the private mailbox used to block this process
     // Add more stuff here */
 } Process;
 
@@ -51,3 +53,5 @@ typedef struct FaultMsg {
 extern int vmStatsMutex;
 
 #define CheckMode() assert(USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)
+
+#endif

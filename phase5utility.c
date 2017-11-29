@@ -8,6 +8,7 @@
 #include "syscallHandlers.h"
 #include "phase5utility.h"
 #include "vm.h"
+#include "providedPrototypes.h"
 
 extern Process ProcTable[];
 
@@ -30,10 +31,15 @@ void setToUserMode()
 
 void initProc(int pid, int pages)
 {
-    Process proc = ProcTable[pid % MAXPROC];
-    proc.numPages = pages;
-    proc.pageTable = NULL;    // TODO: What should I set the pageTable to?
-    proc.privateMboxID = MboxCreate(1, 0);
+    Process *proc = getProc(pid);
+    proc->numPages = pages;
+    proc->pageTable = NULL;    // TODO: What should I set the pageTable to?
+    proc->privateSem = semcreateReal(0);
+    if (proc->privateSem < 0)
+    {
+        USLOSS_Console("initProc(%d): Could not create private semaphore", pid);
+        USLOSS_Halt(1);
+    }
 }
 
 int createMutex()
@@ -54,7 +60,23 @@ void unlockMutex(int mbox)
     MboxReceive(mbox, NULL, 0);
 }
 
-extern void diskSizeReal(int, int *, int *, int *);
+Process *getProc(int pid)
+{
+    return &ProcTable[pid % MAXPROC];
+}
+
+void semPProc()
+{
+    CheckMode();
+    sempReal(getProc(getpid())->privateSem);
+}
+
+void semVProc(int pid)
+{
+    CheckMode();
+    semvReal(getProc(pid)->privateSem);
+}
+
 void initVmStats(VmStats *vmStats, int pages, int frames)
 {
     vmStatsMutex = createMutex();
@@ -76,4 +98,14 @@ void initVmStats(VmStats *vmStats, int pages, int frames)
     vmStats->pageIns = 0;
     vmStats->pageOuts = 0;
     vmStats->replaced = 0;
+}
+
+void enableInterrupts()
+{
+    int result = USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
+    if (result != USLOSS_DEV_OK)
+    {
+        USLOSS_Console("ClockDriver(): Bug in enable interrupts.\n");
+        USLOSS_Halt(1);
+    }
 }
