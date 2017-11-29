@@ -21,11 +21,15 @@ static Process ProcTable[MAXPROC];
 FaultMsg faults[MAXPROC];
 VmStats  vmStats;
 int vmStatsMutex;
+int tempPagerBlock;
+int NumPagers;
+int PagerPIDs[MAXPAGERS];
 void *vmRegion;
 int FaultsMbox;
 
 static void FaultHandler(int type, void *offset);
 static void PrintStats();
+static int Pager(char *);
 
 extern int start5(char *);
 
@@ -137,9 +141,17 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     /*
      * Fork the pagers.
      */
+    tempPagerBlock = createMutex();
+    lockMutex(tempPagerBlock);
+    NumPagers = pagers; 
     for (int i = 0; i < pagers; i++)
     {
-        // TODO fork pagers
+        PagerPIDs[i] = fork1("Pager", Pager, "", USLOSS_MIN_STACK, 2);
+        if (PagerPIDs[i] < 0)
+        {
+            USLOSS_Console("Could not fork pager daemon.  Halting...\n");
+            USLOSS_Halt(1);
+        }
     }
 
     // Zero out, then initialize, the vmStats structure
@@ -200,13 +212,19 @@ void PrintStats(void)
  *
  *----------------------------------------------------------------------
  */
-void vmDestroyReal(void)
+void vmDestroyReal()
 {
     CheckMode();
     int result = USLOSS_MmuDone();
     /*
      * Kill the pagers here.
      */
+    for (int i = 0; i < NumPagers; i++)
+    {
+        unlockMutex(tempPagerBlock);
+        zap(PagerPIDs[i]);
+    }
+
     // Print vm statistics.
     PrintStats();
 
@@ -259,8 +277,11 @@ static void FaultHandler(int type, void* offset)
  */
 static int Pager(char *arg)
 {
+    lockMutex(tempPagerBlock);
     while (1)
     {
+        break;
+
         /* Wait for fault to occur (receive from mailbox) */
         /* Look for free frame */
         /* If there isn't one then use clock algorithm to
