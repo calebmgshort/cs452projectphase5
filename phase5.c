@@ -284,6 +284,11 @@ static void FaultHandler(int type, void* offset)
     * TODO: Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
     * reply.
     */
+   FaultMsg currentMsg = faults[getpid()%MAXPROC];
+   currentMsg.addr = offset;
+   currentMsg.pid = getpid()%MAXPROC;
+   currentMsg.replyMbox = NULL;   // TODO: change
+
 
 } /* FaultHandler */
 
