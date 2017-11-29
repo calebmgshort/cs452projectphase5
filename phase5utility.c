@@ -9,6 +9,8 @@
 #include "phase5utility.h"
 #include "vm.h"
 
+extern Process ProcTable[];
+
 /*
  * Sets the current process into user mode. Requires the process to currently
  * be in kernel mode. Also enables interrupts.
@@ -24,6 +26,14 @@ void setToUserMode()
         USLOSS_Console("setToUserMode(): Bug in psr set.  Halting...\n");
         USLOSS_Halt(1);
     }
+}
+
+void initProc(int pid, int pages)
+{
+    Process proc = ProcTable[pid % MAXPROC];
+    proc.numPages = pages;
+    proc.pageTable = NULL;    // TODO: What should I set the pageTable to?
+    proc.privateMboxID = MboxCreate(1, 0);
 }
 
 int createMutex()

@@ -31,8 +31,9 @@ typedef struct PTE {
  * Per-process information.
  */
 typedef struct Process {
-    int  numPages;   // Size of the page table.
-    PTE  *pageTable; // The page table for the process.
+    int  numPages;          // Size of the page table.
+    PTE  *pageTable;        // The page table for the process.
+    int   privateMboxID;    // The id of the private mailbox used to block this process
     // Add more stuff here */
 } Process;
 

@@ -20,7 +20,7 @@
 // Debugging flag
 int debugflag5 = 0;
 
-static Process ProcTable[MAXPROC];
+Process ProcTable[MAXPROC];
 FaultMsg faults[MAXPROC];
 VmStats  vmStats;
 int vmStatsMutex;
@@ -129,6 +129,13 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
         return (void *) -1;
     }
 
+    // Initialize the proc table
+    for (int i = 0; i < MAXPROC; i++)
+    {
+        int pid = i % MAXPROC;
+        initProc(pid, pages);
+    }
+
     // Init the Mmu
     int status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
     if (status != USLOSS_MMU_OK)
@@ -157,7 +164,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
      */
     tempPagerBlock = createMutex();
     lockMutex(tempPagerBlock);
-    NumPagers = pagers; 
+    NumPagers = pagers;
     for (int i = 0; i < pagers; i++)
     {
         PagerPIDs[i] = fork1("Pager", Pager, NULL, USLOSS_MIN_STACK, 2);
@@ -169,7 +176,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     }
     for (int i = pagers; i < MAXPAGERS; i++)
     {
-      PagerPIDs[i] = -1;
+        PagerPIDs[i] = -1;
     }
 
     // Zero out, then initialize, the vmStats structure
@@ -237,7 +244,7 @@ void vmDestroyReal()
 
     CheckMode();
     int result = USLOSS_MmuDone();
-    
+
     /*
      * Kill the pagers here.
      */
@@ -246,7 +253,7 @@ void vmDestroyReal()
         unlockMutex(tempPagerBlock);
         zap(PagerPIDs[i]);
     }
-    
+
     if(result != USLOSS_MMU_OK)
     {
         USLOSS_Console("vmDestroyReal(): Result of MMuDone is not OK: %d.\n", result);
@@ -289,16 +296,28 @@ static void FaultHandler(int type, void* offset)
    int cause = USLOSS_MmuGetCause();
    assert(cause == USLOSS_MMU_FAULT);
    vmStats.faults++;
+
    /*
-    * TODO: Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
+    * Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
     * reply.
     */
-   FaultMsg currentMsg = faults[getpid()%MAXPROC];
-   currentMsg.addr = offset;
-   currentMsg.pid = getpid()%MAXPROC;
-   currentMsg.replyMbox = NULL;   // TODO: change
-
-
+   FaultMsg* currentMsgPtr = &faults[getpid()%MAXPROC];
+   currentMsgPtr->addr = offset;
+   currentMsgPtr->pid = getpid();
+   currentMsgPtr->replyMbox = FaultsMbox;
+   // Send to pagers
+   int result = MboxSend(currentMsgPtr->replyMbox, NULL, 0);
+   if(result != 0)
+   {
+      USLOSS_Console("FaultHandler(): MboxSend failed.\n");
+   }
+   // Wait for reply
+   Process proc = ProcTable[getpid() % MAXPROC];
+   MboxReceive(proc.privateMboxID, NULL, 0);
+   if(result != 0)
+   {
+      USLOSS_Console("FaultHandler(): MboxReceive failed.\n");
+   }
 } /* FaultHandler */
 
 /*
@@ -318,12 +337,26 @@ static void FaultHandler(int type, void* offset)
  */
 static int Pager(char *arg)
 {
-    lockMutex(tempPagerBlock);
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("Pager(): called.\n");
+    }
+    //lockMutex(tempPagerBlock);
     while (1)
     {
-        break;
+        if (DEBUG5 && debugflag5)
+        {
+            USLOSS_Console("Pager(): Another loop iteration.\n");
+        }
+        //break;
 
         /* Wait for fault to occur (receive from mailbox) */
+        int result = MboxReceive(FaultsMbox, NULL, 0);
+        if(result != 0)
+        {
+           USLOSS_Console("FaultHandler(): MboxReceive failed.\n");
+        }
+        // TODO: continue here
         /* Look for free frame */
         /* If there isn't one then use clock algorithm to
          * replace a page (perhaps write to disk) */
