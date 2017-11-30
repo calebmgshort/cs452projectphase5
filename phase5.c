@@ -37,6 +37,8 @@ int destroySem;
 // Start of the Vm Region
 void *vmRegion;
 
+int vminitCalled = 0;
+
 static void FaultHandler(int, void *);
 static void PrintStats();
 static int Pager(char *);
@@ -184,7 +186,9 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     initVmStats(&vmStats, pages, frames);
 
     int dummy;
-    return USLOSS_MmuRegion(&dummy);
+    int returnVal = USLOSS_MmuRegion(&dummy);
+    vminitCalled = 1;
+    return returnVal;
 } /* vmInitReal */
 
 /*
@@ -313,7 +317,7 @@ static void FaultHandler(int type, void* offset)
     currentMsgPtr->addr = offset;
     currentMsgPtr->pid = getpid();
     currentMsgPtr->replyMbox = FaultsMbox; // TODO figure this out
-    
+
     // Send to pagers
     int pid = getpid();
     int result = MboxSend(FaultsMbox, &pid, sizeof(int));
