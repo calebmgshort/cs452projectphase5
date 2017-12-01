@@ -45,6 +45,7 @@ int NextCheckedFrame = 0;
 int vminitCalled = 0;
 int globalPages = 0;
 int NumFrames = 0;
+int NextBlock = 0;
 
 static void FaultHandler(int, void *);
 static void PrintStats();
@@ -402,6 +403,8 @@ static int Pager(char *arg)
            USLOSS_Console("Pager(): MboxReceive failed with error code %d.\n", result);
            break;
         }
+
+        // Kill the pager
         if (pid < 0)
         {
             break;
@@ -409,19 +412,26 @@ static int Pager(char *arg)
 
         // Get the fault info from the array
         FaultMsg* fault = &faults[pid];
-        int pageNum = (int) ((long) fault->addr / USLOSS_MmuPageSize());
+        int incomingPage = (int) ((long) fault->addr / USLOSS_MmuPageSize());
         if (DEBUG5 && debugflag5)
         {
-            USLOSS_Console("Pager(): Page number %d.\n", pageNum);
+            USLOSS_Console("Pager(): Page number %d.\n", incomingPage);
         }
 
-        // Check if page is new TODO
-        vmStats.new++;
+        // Check if incoming page is new
+        Process *proc = getProc(pid);
+        int incomingPageExists = !(proc->pageTable[incomingPage].state == UNUSED);
+        if (!incomingPageExists)
+        {
+            vmStats.new++;
+        }
+
+        // Mark the incoming page as in main memory
+        proc->pageTable[incomingPage].state = INMEM;
 
         // Find the frame to replace
-        int frame = -1;
+        int frame = EMPTY;
 
-        /* Look for free frame */
         // Search for a free frame
         for (int i = 0; i < NumFrames; i++)
         {
@@ -431,42 +441,128 @@ static int Pager(char *arg)
                 break;
             }
         }
-        // Caleb: I don't think we are prioritizing clean frames, this is the simple clock algorithm
-        // search for clean frames
-        // search for old dirty frames.
-        /* If there isn't one then use clock algorithm to
-         * replace a page (perhaps write to disk) */
-        for (int i = 0; i < NumFrames; i++)
+
+        // If there isn't one then use clock algorithm to
+        // replace a page
+        for (int i = 0; i < NumFrames + 1; i++)
         {
-            int index = (NextCheckedFrame + i) % NumFrames;
-            if(FrameTable[index].accessed)
+            if (frame != EMPTY)
             {
-                FrameTable[index].accessed = FALSE;
+                break;
+            }
+            
+            int index = (NextCheckedFrame + i) % NumFrames;
+            int access;
+            int result = USLOSS_MmuGetAccess(index, &access);
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("Pager(): Could not read frame access bits.\n");
+                USLOSS_Halt(1);
+            }
+
+            if (access & USLOSS_MMU_REF)
+            {
+                result = USLOSS_MmuSetAccess(index, access & ~USLOSS_MMU_REF);
+                
+                if (result != USLOSS_MMU_OK)
+                {
+                    USLOSS_Console("Pager(): Could not set frame access bits.\n");
+                    USLOSS_Halt(1);
+                }
             }
             else
             {
                 frame = index;
-                FrameTable[index].accessed = TRUE;
                 NextCheckedFrame = (index + 1) % NumFrames;
             }
         }
 
+        int outgoingPage = FrameTable[frame].page;
+
+        int access;
+        result = USLOSS_MmuGetAccess(frame, &access);
+        if (result != USLOSS_MMU_OK)
+        {
+            USLOSS_Console("Pager(): Could not read frame access bits.\n");
+            USLOSS_Halt(1);
+        }
+
+        // write to disk if necessary
+        if (outgoingPage != EMPTY && (access & USLOSS_MMU_DIRTY))
+        {
+            // Get the appropriate disk block
+            int block = proc->pageTable[outgoingPage].diskBlock;
+            if (block == -1)
+            {
+                if (NextBlock == 64)
+                {
+                    USLOSS_Console("Pager(): Swap disk has run out of space.\n");
+                    USLOSS_Halt(1);
+                }
+
+                // Find a new block
+                block = NextBlock++;
+                proc->pageTable[outgoingPage].diskBlock = block;
+            }
+
+            int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
+            int sector = sectorsPerPage * block;
+            int track = sector / USLOSS_DISK_TRACK_SIZE;
+            sector = sector % USLOSS_DISK_TRACK_SIZE;
+
+            // Write to the given block
+            char buffer[USLOSS_MmuPageSize()];
+            memcpy(buffer, vmRegion + USLOSS_MmuPageSize() * outgoingPage, USLOSS_MmuPageSize());
+            diskWriteReal(1, track, sector, sectorsPerPage, buffer);
+
+            // Mark the frame as clean
+            result = USLOSS_MmuSetAccess(frame, access & ~USLOSS_MMU_DIRTY);
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("Pager(): Could not set frame access bits.\n");
+                USLOSS_Halt(1);
+            }
+        }
+
         // Perform the mapping
-        result = USLOSS_MmuMap(TAG, pageNum, pageNum, USLOSS_MMU_PROT_RW); // TODO move to fault handler
+        result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW); // TODO move to fault handler
         if (result != USLOSS_MMU_OK)
         {
             USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
             USLOSS_Halt(1);
         }
 
-        // Initialize the frame to match the page TODO read from disk
-        memset(vmRegion + pageNum * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
+        // Update the page table
+        proc->pageTable[outgoingPage].state = ONDISK;
+        proc->pageTable[outgoingPage].frame = -1;
+        proc->pageTable[incomingPage].state = INMEM;
+        proc->pageTable[incomingPage].frame = frame;
+
+        // Initialize the frame to match the page
+        memset(vmRegion + incomingPage * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
+        if (incomingPageExists)
+        {
+            // Read from disk
+            int block = proc->pageTable[incomingPage].diskBlock;
+            if (block == -1)
+            {
+                USLOSS_Console("Pager(): Inconsistent data in page table for proc %d.\n", pid);
+                USLOSS_Halt(1);
+            }
+
+            int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
+            int sector = sectorsPerPage * block;
+            int track = sector / USLOSS_DISK_TRACK_SIZE;
+            sector = sector % USLOSS_DISK_TRACK_SIZE;
+
+            // Write to the given block
+            char buffer[USLOSS_MmuPageSize()];
+            diskReadReal(1, track, sector, sectorsPerPage, buffer);
+            memcpy(vmRegion + USLOSS_MmuPageSize() * incomingPage, buffer, USLOSS_MmuPageSize());
+        }
 
         // Unblock the waiting process
         semVProc(pid);
-
-        // TODO
-        /* Load page into frame from disk, if necessary */
     }
     semvReal(destroySem);
     return 0;

@@ -19,14 +19,14 @@
  * Different states for a page.
  */
 #define UNUSED 500
-#define INCORE 501
-/* You'll probably want more states */
-
+#define INMEM  501
+#define ONDISK 502
 
 /*
  * Page table entry.
  */
-typedef struct PTE {
+typedef struct PTE
+{
     int  state;      // See above.
     int  frame;      // Frame that stores the page (if any). -1 if none.
     int  diskBlock;  // Disk block that stores the page (if any). -1 if none.
@@ -63,8 +63,6 @@ typedef struct FaultMsg {
 typedef struct Frame
 {
     int page;       // The page loaded into this frame
-    int dirty;      // Has this frame been written to since a page was loaded into it?
-    int accessed;   // Has this page been read from since a page was loaded into it?
 } Frame;
 
 extern int vmStatsMutex;
