@@ -11,6 +11,7 @@
 #include "providedPrototypes.h"
 
 extern Process ProcTable[];
+extern int globalPages;
 
 /*
  * Sets the current process into user mode. Requires the process to currently
@@ -29,16 +30,30 @@ void setToUserMode()
     }
 }
 
-void initProc(int pid, int pages)
+// Initialize the given process
+void initProc(int pid)
 {
     Process *proc = getProc(pid);
-    proc->numPages = pages;
-    proc->pageTable = NULL;    // TODO: What should I set the pageTable to?
+    proc->pid = pid;
+    initPageTable(pid);
+    proc->numPages = 0;
     proc->privateSem = semcreateReal(0);
     if (proc->privateSem < 0)
     {
         USLOSS_Console("initProc(%d): Could not create private semaphore", pid);
         USLOSS_Halt(1);
+    }
+}
+
+// Initialize the page table for the process with the given pid
+void initPageTable(int pid)
+{
+    Process *proc = getProc(pid);
+    for (int i = 0; i < globalPages; i++)
+    {
+        proc->pageTable[i].state = UNUSED;
+        proc->pageTable[i].frame = EMPTY;
+        proc->pageTable[i].diskBlock = EMPTY;
     }
 }
 

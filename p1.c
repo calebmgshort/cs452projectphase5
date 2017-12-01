@@ -1,11 +1,15 @@
 #include <usloss.h>
 #include <usyscall.h>
+#include <string.h>
 #include "vm.h"
 #include "phase5.h"
+#include "phase5utility.h"
+#include "providedPrototypes.h"
 
 extern Process ProcTable[];
 extern int vminitCalled;
 extern int debugflag5;
+extern int globalPages;
 
 void p1_fork(int pid)
 {
@@ -21,9 +25,7 @@ void p1_fork(int pid)
     }
 
     // initialize the proc table for this process
-    Process *processPtr = &ProcTable[pid];
-    processPtr->pageTable = NULL;
-    processPtr->numPages = 0;
+    initProc(pid);
 } /* p1_fork */
 
 void p1_switch(int old, int new)
@@ -39,43 +41,37 @@ void p1_switch(int old, int new)
         USLOSS_Console("p1_switch() called: old = %d, new = %d\n", old, new);
     }
 
-    Process *oldProc = &ProcTable[old];
-    Process *newProc = &ProcTable[new];
-    PTE *current;
-    int count;
+    Process *oldProc = getProc(old);
+    Process *newProc = getProc(new);
 
     // Unload all of the mappings from the old process
-    current = oldProc->pageTable;
-    count = 0;
-    while(current != NULL)
+    for (int i = 0; i < globalPages; i++)
     {
-        if(current->frame != -1)  // This PTE has a valid frame, so unmap it
+        PTE *current = &oldProc->pageTable[i];
+        if(current->frame != EMPTY)  // This PTE has a valid frame, so unmap it
         {
-            int result = USLOSS_MmuUnmap(TAG, count);
+            int result = USLOSS_MmuUnmap(TAG, i);
             if (result != USLOSS_MMU_OK)
             {
                 USLOSS_Console("p1_switch(): Could not perform unmapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
             }
         }
-        count++;
     }
 
     // Load all of the mappings for the new process
-    current = newProc->pageTable;
-    count = 0;
-    while(current != NULL)
+    for (int i = 0; i < globalPages; i++)
     {
-        if(current->frame != -1)  // This PTE has a valid frame, so unmap it
+        PTE *current = &newProc->pageTable[i];
+        if (current->frame != -1) // This PTE has a valid frame, so put it in the mmu
         {
-            int result = USLOSS_MmuMap(TAG, count, current->frame, USLOSS_MMU_PROT_RW);
+            int result = USLOSS_MmuMap(TAG, i, current->frame, USLOSS_MMU_PROT_RW);
             if (result != USLOSS_MMU_OK)
             {
-                USLOSS_Console("p1_switch(): Could not perform unmapping. Error code %d.\n", result);
+                USLOSS_Console("p1_switch(): Could not perform mapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
             }
         }
-        count++;
     }
 
     // Increment the number of switches
@@ -96,15 +92,8 @@ void p1_quit(int pid)
     }
 
     // Free memory and set pointers to NULL
-    Process *processPtr = &ProcTable[pid];
-    PTE *current = processPtr->pageTable;
-    PTE *last = NULL;
-    while(current != NULL)
-    {
-        last = current;
-        current = current->next;
-        free(last);
-        last = NULL;
-    }
-    processPtr->pageTable = NULL;
+    Process *processPtr = getProc(pid);
+    processPtr->pid = EMPTY;
+    semfreeReal(processPtr->privateSem);
+    memset(processPtr->pageTable, 0, globalPages * sizeof(PTE));
 } /* p1_quit */

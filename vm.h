@@ -6,6 +6,8 @@
 
 #define DEBUG5 1
 
+#define EMPTY -1
+
 /*
  * All processes use the same tag.
  */
@@ -33,7 +35,9 @@ typedef struct PTE {
 /*
  * Per-process information.
  */
-typedef struct Process {
+typedef struct Process
+{
+    int pid;                // The pid of the process stored in this entry
     int  numPages;          // Size of the page table.
     PTE  *pageTable;        // The page table for the process.
     // Add more stuff here */

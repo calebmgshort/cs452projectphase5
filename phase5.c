@@ -38,6 +38,7 @@ int destroySem;
 void *vmRegion;
 
 int vminitCalled = 0;
+int globalPages = 0;
 
 static void FaultHandler(int, void *);
 static void PrintStats();
@@ -140,9 +141,10 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     // Initialize the proc table
     for (int i = 0; i < MAXPROC; i++)
     {
-        int pid = i % MAXPROC;
-        initProc(pid, pages);
+        getProc(i)->pid = EMPTY;
     }
+
+    globalPages = pages;
 
     // Init the Mmu
     int status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
@@ -153,9 +155,17 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     }
     USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
 
-    /*
-     * Initialize page tables.
-     */
+     // Initialize page tables.
+     for (int i = 0; i < MAXPROC; i++)
+     {
+         Process *proc = getProc(i);
+         proc->pageTable = calloc(pages, sizeof(PTE));
+         if (proc->pageTable == NULL)
+         {
+             USLOSS_Console("vmInitReal(): Could not malloc page tables.\n");
+             USLOSS_Halt(1);
+         }
+     }
 
     // Create the fault mailbox.
     FaultsMbox = MboxCreate(MAXPROC, MAX_MESSAGE);
@@ -185,10 +195,9 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     // Zero out, then initialize, the vmStats structure
     initVmStats(&vmStats, pages, frames);
 
-    int dummy;
-    int returnVal = USLOSS_MmuRegion(&dummy);
     vminitCalled = 1;
-    return returnVal;
+    int dummy;
+    return USLOSS_MmuRegion(&dummy);
 } /* vmInitReal */
 
 /*
@@ -400,7 +409,6 @@ static int Pager(char *arg)
             USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
             USLOSS_Halt(1);
         }
-
         // Initialize the frame to match the page TODO read from disk
         memset(vmRegion + pageNum * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
 
