@@ -7,6 +7,8 @@
 #define DEBUG5 1
 
 #define EMPTY -1
+#define FALSE 0
+#define TRUE 1
 
 /*
  * All processes use the same tag.
@@ -54,6 +56,16 @@ typedef struct FaultMsg {
     int  replyMbox;  // Mailbox to send reply.
     // Add more stuff here.
 } FaultMsg;
+
+/*
+ * A frame in the global frame table.
+ */
+typedef struct Frame
+{
+    int page;       // The page loaded into this frame
+    int dirty;      // Has this frame been written to since a page was loaded into it?
+    int accessed;   // Has this page been read from since a page was loaded into it?
+} Frame;
 
 extern int vmStatsMutex;
 

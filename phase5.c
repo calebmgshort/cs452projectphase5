@@ -37,8 +37,14 @@ int destroySem;
 // Start of the Vm Region
 void *vmRegion;
 
+// Frame table
+Frame *FrameTable;
+int NextCheckedFrame = 0;
+
+// Global Mmu info
 int vminitCalled = 0;
 int globalPages = 0;
+int NumFrames = 0;
 
 static void FaultHandler(int, void *);
 static void PrintStats();
@@ -138,13 +144,12 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
         return (void *) -1;
     }
 
+
     // Initialize the proc table
     for (int i = 0; i < MAXPROC; i++)
     {
         getProc(i)->pid = EMPTY;
     }
-
-    globalPages = pages;
 
     // Init the Mmu
     int status = USLOSS_MmuInit(mappings, pages, frames, USLOSS_MMU_MODE_TLB);
@@ -155,18 +160,27 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     }
     USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
 
-     // Initialize page tables.
-     for (int i = 0; i < MAXPROC; i++)
-     {
-         Process *proc = getProc(i);
-         proc->pageTable = calloc(pages, sizeof(PTE));
-         if (proc->pageTable == NULL)
-         {
-             USLOSS_Console("vmInitReal(): Could not malloc page tables.\n");
-             USLOSS_Halt(1);
-         }
-         initPageTable(i);
-     }
+    // Initialize page tables.
+    globalPages = pages;
+    for (int i = 0; i < MAXPROC; i++)
+    {
+        Process *proc = getProc(i);
+        proc->pageTable = calloc(pages, sizeof(PTE));
+        if (proc->pageTable == NULL)
+        {
+            USLOSS_Console("vmInitReal(): Could not malloc page tables.\n");
+            USLOSS_Halt(1);
+        }
+        initPageTable(i);
+    }
+
+    // Init the frame table
+    NumFrames = frames;
+    FrameTable = calloc(frames, sizeof(Frame));
+    for (int i = 0; i < frames; i++)
+    {
+        FrameTable[i].page = EMPTY;
+    }
 
     // Create the fault mailbox.
     FaultsMbox = MboxCreate(MAXPROC, MAX_MESSAGE);
@@ -400,8 +414,42 @@ static int Pager(char *arg)
         {
             USLOSS_Console("Pager(): Page number %d.\n", pageNum);
         }
+
         // Check if page is new TODO
         vmStats.new++;
+
+        // Find the frame to replace
+        int frame = -1;
+
+        /* Look for free frame */
+        // Search for a free frame
+        for (int i = 0; i < NumFrames; i++)
+        {
+            if (FrameTable[i].page == EMPTY)
+            {
+                frame = i;
+                break;
+            }
+        }
+        // Caleb: I don't think we are prioritizing clean frames, this is the simple clock algorithm
+        // search for clean frames
+        // search for old dirty frames.
+        /* If there isn't one then use clock algorithm to
+         * replace a page (perhaps write to disk) */
+        for (int i = 0; i < NumFrames; i++)
+        {
+            int index = (NextCheckedFrame + i) % NumFrames;
+            if(FrameTable[index].accessed)
+            {
+                FrameTable[index].accessed = FALSE;
+            }
+            else
+            {
+                frame = index;
+                FrameTable[index].accessed = TRUE;
+                NextCheckedFrame = (index + 1) % NumFrames;
+            }
+        }
 
         // Perform the mapping
         result = USLOSS_MmuMap(TAG, pageNum, pageNum, USLOSS_MMU_PROT_RW); // TODO move to fault handler
@@ -410,16 +458,14 @@ static int Pager(char *arg)
             USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
             USLOSS_Halt(1);
         }
+
         // Initialize the frame to match the page TODO read from disk
         memset(vmRegion + pageNum * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
-        
+
         // Unblock the waiting process
         semVProc(pid);
 
         // TODO
-        /* Look for free frame */
-        /* If there isn't one then use clock algorithm to
-         * replace a page (perhaps write to disk) */
         /* Load page into frame from disk, if necessary */
     }
     semvReal(destroySem);
