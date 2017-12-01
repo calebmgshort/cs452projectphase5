@@ -165,6 +165,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
              USLOSS_Console("vmInitReal(): Could not malloc page tables.\n");
              USLOSS_Halt(1);
          }
+         initPageTable(i);
      }
 
     // Create the fault mailbox.
@@ -411,7 +412,7 @@ static int Pager(char *arg)
         }
         // Initialize the frame to match the page TODO read from disk
         memset(vmRegion + pageNum * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
-
+        
         // Unblock the waiting process
         semVProc(pid);
 
