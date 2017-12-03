@@ -15,5 +15,6 @@ extern void semPProc();
 extern void semVProc(int);
 extern void enableInterrupts();
 extern void dumpMappings();
+extern int getNextFrame();
 
 #endif

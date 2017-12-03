@@ -46,6 +46,7 @@ void p1_switch(int old, int new)
 
     if (DEBUG5 && debugflag5)
     {
+        USLOSS_Console("mappings for %d: \n", old);
         dumpMappings();
     }
 
@@ -61,17 +62,7 @@ void p1_switch(int old, int new)
                 USLOSS_Console("p1_switch(): Could not perform unmapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
             }
-            if (DEBUG5 && debugflag5)
-            {
-                USLOSS_Console("p1_switch(): After unmapping %d.\n", i);
-                dumpMappings();
-            }
         }
-    }
-
-    if (DEBUG5 && debugflag5)
-    {
-        dumpMappings();
     }
 
     // Load all of the mappings for the new process
@@ -82,7 +73,7 @@ void p1_switch(int old, int new)
         {
             if (DEBUG5 && debugflag5)
             {
-                USLOSS_Console("Attempting to map frame %d to page %d for process %d\n", current->frame, i, new);
+                USLOSS_Console("p1_switch(): Attempting to map frame %d to page %d for process %d\n", current->frame, i, new);
             }
 
             int result = USLOSS_MmuMap(TAG, i, current->frame, USLOSS_MMU_PROT_RW);
@@ -92,6 +83,12 @@ void p1_switch(int old, int new)
                 USLOSS_Halt(1);
             }
         }
+    }
+
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("mappings for %d: \n", new);
+        dumpMappings();
     }
 
     // Increment the number of switches

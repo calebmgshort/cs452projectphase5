@@ -12,6 +12,7 @@
 
 extern Process ProcTable[];
 extern int globalPages;
+extern int NextCheckedFrame;
 
 /*
  * Sets the current process into user mode. Requires the process to currently
@@ -127,6 +128,7 @@ void enableInterrupts()
 
 void dumpMappings()
 {
+    USLOSS_Console("dumpMappings(): called\n");
     for (int i = 0; i < globalPages; i++)
     {
         int frame;
@@ -134,7 +136,53 @@ void dumpMappings()
         int result = USLOSS_MmuGetMap(TAG, i, &frame, &protection);
         if (result != USLOSS_MMU_ERR_NOMAP)
         {
-            USLOSS_Console("Page %d mapped to frame %d\n", i, frame);
+            USLOSS_Console("\tPage %d mapped to frame %d\n", i, frame);
         }
     }
+}
+
+int getNextFrame()
+{
+    // Search for a free frame
+    for (int i = 0; i < NumFrames; i++)
+    {
+        if (FrameTable[i].page == EMPTY)
+        {
+            return i;
+        }
+    }
+
+    // If there isn't one then use clock algorithm to replace a page
+    for (int i = 0; i < NumFrames + 1; i++)
+    {
+        int index = (NextCheckedFrame + i) % NumFrames;
+        int access;
+        int result = USLOSS_MmuGetAccess(index, &access);
+        if (result != USLOSS_MMU_OK)
+        {
+            USLOSS_Console("Pager(): Could not read frame access bits.\n");
+            USLOSS_Halt(1);
+        }
+
+        if (access & USLOSS_MMU_REF)
+        {
+            result = USLOSS_MmuSetAccess(index, access & ~USLOSS_MMU_REF);
+
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("Pager(): Could not set frame access bits.\n");
+                USLOSS_Halt(1);
+            }
+        }
+        else
+        {
+            NextCheckedFrame = (index + 1) % NumFrames;
+            return index;
+        }
+    }
+
+    USLOSS_Console("getNextFrame(): Error: inconsistent data.");
+    USLOSS_Halt(1);
+
+    return -1;
 }

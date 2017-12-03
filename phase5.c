@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 0;
+int debugflag5 = 1;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -430,57 +430,15 @@ static int Pager(char *arg)
         proc->pageTable[incomingPage].state = INMEM;
 
         // Find the frame to replace
-        int frame = EMPTY;
-
-        // Search for a free frame
-        for (int i = 0; i < NumFrames; i++)
+        int frame = getNextFrame();
+        if (FrameTable[frame].page != EMPTY)
         {
-            if (FrameTable[i].page == EMPTY)
-            {
-                frame = i;
-                break;
-            }
-        }
-
-        // If there isn't one then use clock algorithm to
-        // replace a page
-        for (int i = 0; i < NumFrames + 1; i++)
-        {
-            if (frame != EMPTY)
-            {
-                break;
-            }
-
-            int index = (NextCheckedFrame + i) % NumFrames;
-            int access;
-            int result = USLOSS_MmuGetAccess(index, &access);
+            // perform the unmapping
+            result = USLOSS_MmuUnmap(TAG, FrameTable[frame].page);
             if (result != USLOSS_MMU_OK)
             {
-                USLOSS_Console("Pager(): Could not read frame access bits.\n");
+                USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
-            }
-
-            if (access & USLOSS_MMU_REF)
-            {
-                result = USLOSS_MmuSetAccess(index, access & ~USLOSS_MMU_REF);
-
-                if (result != USLOSS_MMU_OK)
-                {
-                    USLOSS_Console("Pager(): Could not set frame access bits.\n");
-                    USLOSS_Halt(1);
-                }
-            }
-            else
-            {
-                frame = index;
-                // perform the unmapping
-                result = USLOSS_MmuUnmap(TAG, FrameTable[index].page);
-                if (result != USLOSS_MMU_OK)
-                {
-                    USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
-                    USLOSS_Halt(1);
-                }
-                NextCheckedFrame = (index + 1) % NumFrames;
             }
         }
 
