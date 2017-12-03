@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 1;
+int debugflag5 = 0;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -566,6 +566,14 @@ static int Pager(char *arg)
             char buffer[USLOSS_MmuPageSize()];
             diskReadReal(1, track, sector, sectorsPerPage, buffer);
             memcpy(vmRegion + USLOSS_MmuPageSize() * incomingPage, buffer, USLOSS_MmuPageSize());
+        }
+
+        // Undo our temporary mapping above
+        result = USLOSS_MmuUnmap(TAG, incomingPage);
+        if (result != USLOSS_MMU_OK)
+        {
+            USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
+            USLOSS_Halt(1);
         }
 
         // Unblock the waiting process
