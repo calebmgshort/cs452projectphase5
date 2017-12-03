@@ -531,8 +531,8 @@ static int Pager(char *arg)
             }
         }
 
-        // Perform the mapping
-        result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW); // TODO move to fault handler
+        // Perform the temperary mapping (so we can write to disk)
+        result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW);
         if (result != USLOSS_MMU_OK)
         {
             USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
@@ -544,6 +544,9 @@ static int Pager(char *arg)
         proc->pageTable[outgoingPage].frame = -1;
         proc->pageTable[incomingPage].state = INMEM;
         proc->pageTable[incomingPage].frame = frame;
+
+        // Update the frame table
+        FrameTable[frame].page = incomingPage;
 
         // Initialize the frame to match the page
         memset(vmRegion + incomingPage * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
