@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 0;
+int debugflag5 = 1;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -450,7 +450,7 @@ static int Pager(char *arg)
             {
                 break;
             }
-            
+
             int index = (NextCheckedFrame + i) % NumFrames;
             int access;
             int result = USLOSS_MmuGetAccess(index, &access);
@@ -463,7 +463,7 @@ static int Pager(char *arg)
             if (access & USLOSS_MMU_REF)
             {
                 result = USLOSS_MmuSetAccess(index, access & ~USLOSS_MMU_REF);
-                
+
                 if (result != USLOSS_MMU_OK)
                 {
                     USLOSS_Console("Pager(): Could not set frame access bits.\n");
@@ -473,6 +473,13 @@ static int Pager(char *arg)
             else
             {
                 frame = index;
+                // perform the unmapping
+                result = USLOSS_MmuUnmap(TAG, FrameTable[index].page);
+                if (result != USLOSS_MMU_OK)
+                {
+                    USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
+                    USLOSS_Halt(1);
+                }
                 NextCheckedFrame = (index + 1) % NumFrames;
             }
         }

@@ -124,3 +124,17 @@ void enableInterrupts()
         USLOSS_Halt(1);
     }
 }
+
+void dumpMappings()
+{
+    for (int i = 0; i < globalPages; i++)
+    {
+        int frame;
+        int protection;
+        int result = USLOSS_MmuGetMap(TAG, i, &frame, &protection);
+        if (result != USLOSS_MMU_ERR_NOMAP)
+        {
+            USLOSS_Console("Page %d mapped to frame %d\n", i, frame);
+        }
+    }
+}

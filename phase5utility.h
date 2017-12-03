@@ -14,5 +14,6 @@ extern Process *getProc(int);
 extern void semPProc();
 extern void semVProc(int);
 extern void enableInterrupts();
+extern void dumpMappings();
 
 #endif
