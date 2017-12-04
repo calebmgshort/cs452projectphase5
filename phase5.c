@@ -41,11 +41,14 @@ void *vmRegion;
 Frame *FrameTable;
 int NextCheckedFrame = 0;
 
-// Global Mmu info
-int vminitCalled = 0;
-int globalPages = 0;
-int NumFrames = 0;
+// The Disk Table
+DiskBlock *DiskTable;
 int NextBlock = 0;
+
+// Global Mmu info
+int VMInitialized = 0;
+int NumPages = 0;
+int NumFrames = 0;
 
 static void FaultHandler(int, void *);
 static void PrintStats();
@@ -145,7 +148,6 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
         return (void *) -1;
     }
 
-
     // Initialize the proc table
     for (int i = 0; i < MAXPROC; i++)
     {
@@ -162,11 +164,11 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     USLOSS_IntVec[USLOSS_MMU_INT] = FaultHandler;
 
     // Initialize page tables.
-    globalPages = pages;
+    NumPages = pages;
     for (int i = 0; i < MAXPROC; i++)
     {
         Process *proc = getProc(i);
-        proc->pageTable = calloc(pages, sizeof(PTE));
+        proc->pageTable = malloc(pages * sizeof(PTE));
         if (proc->pageTable == NULL)
         {
             USLOSS_Console("vmInitReal(): Could not malloc page tables.\n");
@@ -177,10 +179,10 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
 
     // Init the frame table
     NumFrames = frames;
-    FrameTable = calloc(frames, sizeof(Frame));
+    FrameTable = malloc(frames * sizeof(Frame));
     for (int i = 0; i < frames; i++)
     {
-        FrameTable[i].page = EMPTY;
+        (&FrameTable[i])->page = EMPTY;
     }
 
     // Create the fault mailbox.
@@ -211,7 +213,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     // Zero out, then initialize, the vmStats structure
     initVmStats(&vmStats, pages, frames);
 
-    vminitCalled = 1;
+    VMInitialized = 1;
     int dummy;
     return USLOSS_MmuRegion(&dummy);
 } /* vmInitReal */
@@ -400,11 +402,11 @@ static int Pager(char *arg)
         int result = MboxReceive(FaultsMbox, &pid, sizeof(int));
         if (result < 0)
         {
-           USLOSS_Console("Pager(): MboxReceive failed with error code %d.\n", result);
-           break;
+            USLOSS_Console("Pager(): MboxReceive failed with error code %d.\n", result);
+            break;
         }
 
-        // Kill the pager
+        // Kill the pager with killcode
         if (pid < 0)
         {
             break;
@@ -415,23 +417,21 @@ static int Pager(char *arg)
         int incomingPage = (int) ((long) fault->addr / USLOSS_MmuPageSize());
         if (DEBUG5 && debugflag5)
         {
-            USLOSS_Console("Pager(): Page number %d.\n", incomingPage);
+            USLOSS_Console("Pager(): Fault for page number %d.\n", incomingPage);
         }
 
         // Check if incoming page is new
         Process *proc = getProc(pid);
-        int incomingPageExists = !(proc->pageTable[incomingPage].state == UNUSED);
+        int incomingPageExists = proc->pageTable[incomingPage].state != UNUSED;
         if (!incomingPageExists)
         {
             vmStats.new++;
         }
 
-        // Mark the incoming page as in main memory
-        proc->pageTable[incomingPage].state = INMEM;
-
         // Find the frame to replace
         int frame = getNextFrame();
-        if (FrameTable[frame].page != EMPTY)
+        int outgoingPage = FrameTable[frame].page;
+        if (outgoingPage != EMPTY)
         {
             // perform the unmapping
             result = USLOSS_MmuUnmap(TAG, FrameTable[frame].page);
@@ -441,8 +441,6 @@ static int Pager(char *arg)
                 USLOSS_Halt(1);
             }
         }
-
-        int outgoingPage = FrameTable[frame].page;
 
         int access;
         result = USLOSS_MmuGetAccess(frame, &access);
@@ -489,6 +487,10 @@ static int Pager(char *arg)
             }
         }
 
+        // Update the page table about the removal
+        proc->pageTable[outgoingPage].state = ONDISK;
+        proc->pageTable[outgoingPage].frame = -1;
+
         // Perform the temperary mapping (so we can write to disk)
         result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW);
         if (result != USLOSS_MMU_OK)
@@ -497,13 +499,9 @@ static int Pager(char *arg)
             USLOSS_Halt(1);
         }
 
-        // Update the page table
-        proc->pageTable[outgoingPage].state = ONDISK;
-        proc->pageTable[outgoingPage].frame = -1;
+        // Update the page and frame tables
         proc->pageTable[incomingPage].state = INMEM;
         proc->pageTable[incomingPage].frame = frame;
-
-        // Update the frame table
         FrameTable[frame].page = incomingPage;
 
         // Initialize the frame to match the page

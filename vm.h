@@ -30,8 +30,6 @@ typedef struct PTE
     int  state;      // See above.
     int  frame;      // Frame that stores the page (if any). -1 if none.
     int  diskBlock;  // Disk block that stores the page (if any). -1 if none.
-    // Add more stuff here
-    struct PTE *next;
 } PTE;
 
 /*
@@ -40,17 +38,16 @@ typedef struct PTE
 typedef struct Process
 {
     int pid;                // The pid of the process stored in this entry
-    int  numPages;          // Size of the page table.
-    PTE  *pageTable;        // The page table for the process.
-    // Add more stuff here */
-    int   privateSem;       // The id of the private mailbox used to block this process
+    PTE *pageTable;         // The page table for the process.
+    int privateSem;         // The id of the private mailbox used to block this process
 } Process;
 
 /*
  * Information about page faults. This message is sent by the faulting
  * process to the pager to request that the fault be handled.
  */
-typedef struct FaultMsg {
+typedef struct FaultMsg
+{
     int  pid;        // Process with the problem.
     void *addr;      // Address that caused the fault.
     int  replyMbox;  // Mailbox to send reply.
@@ -64,6 +61,11 @@ typedef struct Frame
 {
     int page;       // The page loaded into this frame
 } Frame;
+
+typedef struct DiskBlock
+{
+    int page;       // The page stored in this block
+} DiskBlock;
 
 extern int vmStatsMutex;
 

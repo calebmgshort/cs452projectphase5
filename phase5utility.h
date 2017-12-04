@@ -4,7 +4,6 @@
 #include "vm.h"
 
 extern void setToUserMode();
-extern void initProc(int);
 void initPageTable(int pid);
 extern int createMutex();
 extern void lockMutex(int);

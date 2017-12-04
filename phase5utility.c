@@ -11,8 +11,10 @@
 #include "providedPrototypes.h"
 
 extern Process ProcTable[];
-extern int globalPages;
+extern int NumPages;
 extern int NextCheckedFrame;
+extern Frame *FrameTable;
+extern int NumFrames;
 
 /*
  * Sets the current process into user mode. Requires the process to currently
@@ -31,26 +33,11 @@ void setToUserMode()
     }
 }
 
-// Initialize the given process
-void initProc(int pid)
-{
-    Process *proc = getProc(pid);
-    proc->pid = pid;
-    initPageTable(pid);
-    proc->numPages = 0;
-    proc->privateSem = semcreateReal(0);
-    if (proc->privateSem < 0)
-    {
-        USLOSS_Console("initProc(%d): Could not create private semaphore", pid);
-        USLOSS_Halt(1);
-    }
-}
-
 // Initialize the page table for the process with the given pid
 void initPageTable(int pid)
 {
     Process *proc = getProc(pid);
-    for (int i = 0; i < globalPages; i++)
+    for (int i = 0; i < NumPages; i++)
     {
         proc->pageTable[i].state = UNUSED;
         proc->pageTable[i].frame = EMPTY;
@@ -129,7 +116,7 @@ void enableInterrupts()
 void dumpMappings()
 {
     USLOSS_Console("dumpMappings(): called\n");
-    for (int i = 0; i < globalPages; i++)
+    for (int i = 0; i < NumPages; i++)
     {
         int frame;
         int protection;
@@ -137,6 +124,12 @@ void dumpMappings()
         if (result != USLOSS_MMU_ERR_NOMAP)
         {
             USLOSS_Console("\tPage %d mapped to frame %d\n", i, frame);
+     
+            if (FrameTable[frame].page != i)
+            {
+                USLOSS_Console("dumpMappings(): Found mapping inconsistent with the frame table.\n");
+                USLOSS_Halt(1);
+            }
         }
     }
 }
