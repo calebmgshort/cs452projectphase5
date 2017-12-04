@@ -460,6 +460,11 @@ static int Pager(char *arg)
         // write to disk if necessary
         if (outgoingPage != EMPTY && (access & USLOSS_MMU_DIRTY))
         {
+            if (DEBUG5 && debugflag5)
+            {
+                USLOSS_Console("Pager(): Writing page %d to disk for pid %d.\n", outgoingPage, pid);
+            }
+
             // Get the appropriate disk block
             int block = proc->pageTable[outgoingPage].diskBlock;
             if (block == -1)
@@ -493,14 +498,6 @@ static int Pager(char *arg)
                 USLOSS_Halt(1);
             }
             writePageToDisk(buffer, pid, outgoingPage);
-
-            // Mark the frame as clean
-            result = USLOSS_MmuSetAccess(frame, access & ~USLOSS_MMU_DIRTY);
-            if (result != USLOSS_MMU_OK)
-            {
-                USLOSS_Console("Pager(): Could not set frame access bits.\n");
-                USLOSS_Halt(1);
-            }
         }
 
         // Update the page table about the removal
@@ -512,7 +509,7 @@ static int Pager(char *arg)
 
         // Initialize the buffer to match the page
         char buffer[USLOSS_MmuPageSize()];
-        if (incomingPageExists)
+        if (incomingPageExists && proc->pageTable[incomingPage].diskBlock != EMPTY)
         {
             readPageFromDisk(buffer, pid, incomingPage);
         }
@@ -536,6 +533,14 @@ static int Pager(char *arg)
         if (result != USLOSS_MMU_OK)
         {
             USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
+            USLOSS_Halt(1);
+        }
+
+        // Mark the buffer as clean
+        result = USLOSS_MmuSetAccess(frame, access & ~USLOSS_MMU_DIRTY);
+        if (result != USLOSS_MMU_OK)
+        {
+            USLOSS_Console("Pager(): Could not set frame access bits.\n");
             USLOSS_Halt(1);
         }
 
