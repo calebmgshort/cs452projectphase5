@@ -137,6 +137,10 @@ void dumpMappings()
             if (FrameTable[frame].page != i)
             {
                 USLOSS_Console("dumpMappings(): Found mapping inconsistent with the frame table.\n");
+                for (int j = 0; j < NumFrames; j++)
+                {
+                    USLOSS_Console("\tFrame %d has page %d\n", j, FrameTable[j].page);
+                }
                 USLOSS_Halt(1);
             }
         }

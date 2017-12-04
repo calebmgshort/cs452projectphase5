@@ -346,6 +346,10 @@ static void FaultHandler(int type, void* offset)
     currentMsgPtr->replyMbox = FaultsMbox; // TODO figure this out
 
     // Send to pagers
+    if (DEBUG5 && debugflag5)
+    {
+        USLOSS_Console("FaultHandler(): Sending fault for address %p.\n", currentMsgPtr->addr);
+    }
     int pid = getpid();
     int result = MboxSend(FaultsMbox, &pid, sizeof(int));
     if (result != 0)
@@ -418,7 +422,7 @@ static int Pager(char *arg)
         int incomingPage = (int) ((long) fault->addr / USLOSS_MmuPageSize());
         if (DEBUG5 && debugflag5)
         {
-            USLOSS_Console("Pager(): Fault for page number %d.\n", incomingPage);
+            USLOSS_Console("Pager(): Fault for address %p, page number %d.\n", fault->addr, incomingPage);
         }
 
         // Check if incoming page is new
@@ -430,8 +434,20 @@ static int Pager(char *arg)
         }
 
         // Find the frame to replace
+        for (int i = 0; i < NumPages; i++)
+        {
+            int frame = proc->pageTable[i].frame;
+            if (frame != EMPTY)
+            {
+                FrameTable[frame].page = i;
+            }
+        }
         int frame = getNextFrame();
         int outgoingPage = FrameTable[frame].page;
+        for (int i = 0; i < NumFrames; i++)
+        {
+            FrameTable[i].page = EMPTY;
+        }
 
         int access;
         result = USLOSS_MmuGetAccess(frame, &access);
@@ -463,14 +479,14 @@ static int Pager(char *arg)
 
             // Read the buffer from the vmRegion and write to disk TODO what if timesliced?
             char buffer[USLOSS_MmuPageSize()];
-            result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW);
+            result = USLOSS_MmuMap(TAG, outgoingPage, frame, USLOSS_MMU_PROT_RW);
             if (result != USLOSS_MMU_OK)
             {
                 USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
             }
             memcpy(buffer, page(outgoingPage), USLOSS_MmuPageSize());
-            result = USLOSS_MmuUnmap(TAG, incomingPage);
+            result = USLOSS_MmuUnmap(TAG, outgoingPage);
             if (result != USLOSS_MMU_OK)
             {
                 USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
@@ -487,16 +503,9 @@ static int Pager(char *arg)
             }
         }
 
-        // Update the page table about the removal and unmap
+        // Update the page table about the removal
         if (outgoingPage != EMPTY)
         {
-            // perform the unmapping
-            result = USLOSS_MmuUnmap(TAG, FrameTable[frame].page);
-            if (result != USLOSS_MMU_OK)
-            {
-                USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
-                USLOSS_Halt(1);
-            }
             proc->pageTable[outgoingPage].state = ONDISK;
             proc->pageTable[outgoingPage].frame = -1;
         }
