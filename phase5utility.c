@@ -206,6 +206,8 @@ void readPageFromDisk(char *buffer, int pid, int page)
 {
     CheckMode();
 
+    vmStats.pageIns++;
+
     Process *proc = getProc(pid);
     int diskBlock = proc->pageTable[page].diskBlock;
     if (diskBlock == EMPTY)
@@ -233,6 +235,8 @@ void readPageFromDisk(char *buffer, int pid, int page)
 void writePageToDisk(char *buffer, int pid, int page)
 {
     CheckMode();
+
+    vmStats.pageOuts++;
 
     Process *proc = getProc(pid);
     int diskBlock = proc->pageTable[page].diskBlock;
