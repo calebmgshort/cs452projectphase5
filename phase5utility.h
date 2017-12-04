@@ -15,5 +15,7 @@ extern void semVProc(int);
 extern void enableInterrupts();
 extern void dumpMappings();
 extern int getNextFrame();
-
+extern void *page(int);
+extern void writePageToDisk(char *, int, int);
+extern void readPageFromDisk(char *, int, int);
 #endif

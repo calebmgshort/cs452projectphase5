@@ -37,6 +37,45 @@ void p1_fork(int pid)
     initPageTable(pid);
 } /* p1_fork */
 
+static void unloadMappings(const char *caller, int pid)
+{
+    Process *proc = getProc(pid);
+    for (int i = 0; i < NumPages; i++)
+    {
+        PTE *pte = proc->pageTable + i;
+
+        // Unmap if the PTE has a valid frame
+        if (pte->frame != EMPTY)
+        {
+            if (DEBUG5 && debugflag5)
+            {
+                USLOSS_Console("%s(): Attempting to unmap page %d from frame %d for process %d\n", caller, i, pte->frame, pid);
+            }
+
+            if (FrameTable[pte->frame].page != i)
+            {
+                USLOSS_Console("%s(): Found inconsistent data in frame table.\n", caller);
+                USLOSS_Halt(1);
+            }
+
+            if (pte->state != INMEM)
+            {
+                USLOSS_Console("%s(): Inconsistent page state for (old) page %d.\n", caller, i);
+                USLOSS_Halt(1);
+            }
+
+            int result = USLOSS_MmuUnmap(TAG, i);
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("%s(): Could not perform unmapping. Error code %d.\n", caller, result);
+                USLOSS_Halt(1);
+            }
+
+            FrameTable[pte->frame].page = EMPTY;
+        }
+    }
+}
+
 void p1_switch(int old, int new)
 {
     // Don't run unluss VMInit has already been called
@@ -50,7 +89,6 @@ void p1_switch(int old, int new)
         USLOSS_Console("p1_switch() called: old = %d, new = %d\n", old, new);
     }
 
-    Process *oldProc = getProc(old);
     Process *newProc = getProc(new);
 
     if (DEBUG5 && debugflag5)
@@ -60,42 +98,7 @@ void p1_switch(int old, int new)
     }
 
     // Unload all of the mappings from the old process
-    for (int i = 0; i < NumPages; i++)
-    {
-        PTE *current = &oldProc->pageTable[i];
-        // Unmap if the PTE has a valid frame
-        if (current->frame != EMPTY)
-        {
-            if (DEBUG5 && debugflag5)
-            {
-                USLOSS_Console("p1_switch(): Attempting to unmap page %d from frame %d for process %d\n", i, current->frame, old);
-            }
-
-            if (FrameTable[current->frame].page != i)
-            {
-                USLOSS_Console("p1_switch(): Found inconsistent data in frame table.\n");
-                USLOSS_Halt(1);
-            }
-
-            if (current->state != INMEM)
-            {
-                USLOSS_Console("p1_switch(): Inconsistent page state for (old) page %d.\n", i);
-                USLOSS_Halt(1);
-            }
-
-            int result = USLOSS_MmuUnmap(TAG, i);
-            if (result != USLOSS_MMU_OK)
-            {
-                USLOSS_Console("p1_switch(): Could not perform unmapping. Error code %d.\n", result);
-                USLOSS_Halt(1);
-            }
-
-            current->frame = EMPTY;
-            current->state = ONDISK;
-            // TODO write contents of page to disk if they are unclean
-            FrameTable[current->frame].page = EMPTY;
-        }
-    }
+    unloadMappings("p1_switch", old);
 
     // Ensure that all the frames are empty now
     for (int i = 0; i < NumFrames; i++)
@@ -123,9 +126,10 @@ void p1_switch(int old, int new)
                 USLOSS_Console("p1_switch(): Attempting to map frame %d to page %d for process %d\n", current->frame, i, new);
             }
 
-            if (current->state != ONDISK)
+            if (current->state != INMEM)
             {
                 USLOSS_Console("p1_switch(): Inconsistent page state for (new) page %d.\n", i);
+                USLOSS_Halt(1);
             }
 
             int result = USLOSS_MmuMap(TAG, i, current->frame, USLOSS_MMU_PROT_RW);
@@ -135,9 +139,7 @@ void p1_switch(int old, int new)
                 USLOSS_Halt(1);
             }
 
-            current->state = INMEM;
             FrameTable[current->frame].page = i;
-            // TODO load disk contents if necessary
         }
     }
 
@@ -163,13 +165,17 @@ void p1_quit(int pid)
     {
         USLOSS_Console("p1_quit() called: pid = %d\n", pid);
     }
-
-    // TODO when a process quits, what happens to its mappings?
-    // Check that switch is called or handle that here.
-    // If switch is called, will the page table for this proc cause problems?
-
+    
+    // Unload all mappings without regards to page table
+    unloadMappings("p1_quit", pid);
+    
     // Clean up the proc table entry for this process.
     Process *processPtr = getProc(pid);
+    if (processPtr->pid == EMPTY)
+    {
+        // This is a pre vmInit proc
+        return;
+    }
     processPtr->pid = EMPTY;
     int result = semfreeReal(processPtr->privateSem);
     if (result != 0)

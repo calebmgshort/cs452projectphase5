@@ -15,6 +15,7 @@ extern int NumPages;
 extern int NextCheckedFrame;
 extern Frame *FrameTable;
 extern int NumFrames;
+extern void *vmRegion;
 
 /*
  * Sets the current process into user mode. Requires the process to currently
@@ -121,7 +122,15 @@ void dumpMappings()
         int frame;
         int protection;
         int result = USLOSS_MmuGetMap(TAG, i, &frame, &protection);
-        if (result != USLOSS_MMU_ERR_NOMAP)
+        if (result == USLOSS_MMU_ERR_NOMAP)
+        {
+            continue;
+        }
+        else if (result == USLOSS_MMU_ERR_OFF)
+        {
+            return;
+        }
+        else if (result == USLOSS_MMU_OK)
         {
             USLOSS_Console("\tPage %d mapped to frame %d\n", i, frame);
      
@@ -130,6 +139,10 @@ void dumpMappings()
                 USLOSS_Console("dumpMappings(): Found mapping inconsistent with the frame table.\n");
                 USLOSS_Halt(1);
             }
+        }
+        else
+        {
+            USLOSS_Console("dumpMappings(): Failed. Error code %d.\n", result);
         }
     }
 }
@@ -178,4 +191,65 @@ int getNextFrame()
     USLOSS_Halt(1);
 
     return -1;
+}
+
+void *page(int pageNum)
+{
+    return vmRegion + USLOSS_MmuPageSize() * pageNum;
+}
+
+void readPageFromDisk(char *buffer, int pid, int page)
+{
+    CheckMode();
+
+    Process *proc = getProc(pid);
+    int diskBlock = proc->pageTable[page].diskBlock;
+    if (diskBlock == EMPTY)
+    {
+        USLOSS_Console("readPageFromDisk(): Trying to read page without a set diskBlock. pid %d page %d.\n", pid, page);
+        USLOSS_Halt(1);
+    }
+    else if (proc->pageTable[page].state != ONDISK)
+    {
+        USLOSS_Console("readPageFromDisk(): Trying to read page that is not ONDISK. pid %d page %d.\n", pid, page);
+        USLOSS_Halt(1);
+    }
+
+    // TODO also check the disk table for consistency
+
+    int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
+    int totalSectors = sectorsPerPage * diskBlock;
+    int track = totalSectors / USLOSS_DISK_TRACK_SIZE;
+    int sector = totalSectors % USLOSS_DISK_TRACK_SIZE;
+
+    // Read into a buffer
+    diskReadReal(1, track, sector, sectorsPerPage, buffer);
+}
+
+void writePageToDisk(char *buffer, int pid, int page)
+{
+    CheckMode();
+
+    Process *proc = getProc(pid);
+    int diskBlock = proc->pageTable[page].diskBlock;
+    if (diskBlock == EMPTY)
+    {
+        USLOSS_Console("writePageToDisk(): Trying to write page without a set diskBlock. pid %d page %d.\n", pid, page);
+        USLOSS_Halt(1);
+    }
+    else if (proc->pageTable[page].state != INMEM)
+    {
+        USLOSS_Console("writePageToDisk(): Trying to write page that is not INMEM. pid %d page %d.\n", pid, page);
+        USLOSS_Halt(1);
+    }
+
+    // TODO also check the disk table for consistency
+
+    int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
+    int totalSectors = sectorsPerPage * diskBlock;
+    int track = totalSectors / USLOSS_DISK_TRACK_SIZE;
+    int sector = totalSectors / USLOSS_DISK_TRACK_SIZE;
+
+    // Write the contents of the buffer
+    diskWriteReal(1, track, sector, sectorsPerPage, buffer);
 }

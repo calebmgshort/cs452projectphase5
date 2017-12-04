@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 1;
+int debugflag5 = 0;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -392,6 +392,7 @@ static int Pager(char *arg)
     }
     while (1)
     {
+        // Kill pager if we are zapped
         if (isZapped())
         {
             break;
@@ -406,14 +407,14 @@ static int Pager(char *arg)
             break;
         }
 
-        // Kill the pager with killcode
+        // Kill the pager if we got the killcode
         if (pid < 0)
         {
             break;
         }
 
         // Get the fault info from the array
-        FaultMsg* fault = &faults[pid];
+        FaultMsg *fault = &faults[pid];
         int incomingPage = (int) ((long) fault->addr / USLOSS_MmuPageSize());
         if (DEBUG5 && debugflag5)
         {
@@ -431,16 +432,6 @@ static int Pager(char *arg)
         // Find the frame to replace
         int frame = getNextFrame();
         int outgoingPage = FrameTable[frame].page;
-        if (outgoingPage != EMPTY)
-        {
-            // perform the unmapping
-            result = USLOSS_MmuUnmap(TAG, FrameTable[frame].page);
-            if (result != USLOSS_MMU_OK)
-            {
-                USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
-                USLOSS_Halt(1);
-            }
-        }
 
         int access;
         result = USLOSS_MmuGetAccess(frame, &access);
@@ -461,22 +452,31 @@ static int Pager(char *arg)
                 {
                     USLOSS_Console("Pager(): Swap disk has run out of space.\n");
                     USLOSS_Halt(1);
+                    // TODO should terminate proc instead of halt
                 }
 
                 // Find a new block
                 block = NextBlock++;
                 proc->pageTable[outgoingPage].diskBlock = block;
+                // TODO update disk table
             }
 
-            int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
-            int sector = sectorsPerPage * block;
-            int track = sector / USLOSS_DISK_TRACK_SIZE;
-            sector = sector % USLOSS_DISK_TRACK_SIZE;
-
-            // Write to the given block
+            // Read the buffer from the vmRegion and write to disk TODO what if timesliced?
             char buffer[USLOSS_MmuPageSize()];
-            memcpy(buffer, vmRegion + USLOSS_MmuPageSize() * outgoingPage, USLOSS_MmuPageSize());
-            diskWriteReal(1, track, sector, sectorsPerPage, buffer);
+            result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW);
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
+                USLOSS_Halt(1);
+            }
+            memcpy(buffer, page(outgoingPage), USLOSS_MmuPageSize());
+            result = USLOSS_MmuUnmap(TAG, incomingPage);
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
+                USLOSS_Halt(1);
+            }
+            writePageToDisk(buffer, pid, outgoingPage);
 
             // Mark the frame as clean
             result = USLOSS_MmuSetAccess(frame, access & ~USLOSS_MMU_DIRTY);
@@ -487,53 +487,52 @@ static int Pager(char *arg)
             }
         }
 
-        // Update the page table about the removal
-        proc->pageTable[outgoingPage].state = ONDISK;
-        proc->pageTable[outgoingPage].frame = -1;
+        // Update the page table about the removal and unmap
+        if (outgoingPage != EMPTY)
+        {
+            // perform the unmapping
+            result = USLOSS_MmuUnmap(TAG, FrameTable[frame].page);
+            if (result != USLOSS_MMU_OK)
+            {
+                USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
+                USLOSS_Halt(1);
+            }
+            proc->pageTable[outgoingPage].state = ONDISK;
+            proc->pageTable[outgoingPage].frame = -1;
+        }
 
-        // Perform the temperary mapping (so we can write to disk)
+        // Initialize the buffer to match the page
+        char buffer[USLOSS_MmuPageSize()];
+        if (incomingPageExists)
+        {
+            readPageFromDisk(buffer, pid, incomingPage);
+        }
+        else
+        {
+            for (int i = 0; i < USLOSS_MmuPageSize(); i++)
+            {
+                buffer[i] = 0;
+            }
+        }
+
+        // Write the buffer TODO what if we are timesliced with the temp mapping?
         result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW);
         if (result != USLOSS_MMU_OK)
         {
             USLOSS_Console("Pager(): Could not perform mapping. Error code %d.\n", result);
             USLOSS_Halt(1);
         }
-
-        // Update the page and frame tables
-        proc->pageTable[incomingPage].state = INMEM;
-        proc->pageTable[incomingPage].frame = frame;
-        FrameTable[frame].page = incomingPage;
-
-        // Initialize the frame to match the page
-        memset(vmRegion + incomingPage * USLOSS_MmuPageSize(), 0, USLOSS_MmuPageSize());
-        if (incomingPageExists)
-        {
-            // Read from disk
-            int block = proc->pageTable[incomingPage].diskBlock;
-            if (block == -1)
-            {
-                USLOSS_Console("Pager(): Inconsistent data in page table for proc %d.\n", pid);
-                USLOSS_Halt(1);
-            }
-
-            int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
-            int sector = sectorsPerPage * block;
-            int track = sector / USLOSS_DISK_TRACK_SIZE;
-            sector = sector % USLOSS_DISK_TRACK_SIZE;
-
-            // Write to the given block
-            char buffer[USLOSS_MmuPageSize()];
-            diskReadReal(1, track, sector, sectorsPerPage, buffer);
-            memcpy(vmRegion + USLOSS_MmuPageSize() * incomingPage, buffer, USLOSS_MmuPageSize());
-        }
-
-        // Undo our temporary mapping above
+        memcpy(page(incomingPage), buffer, USLOSS_MmuPageSize());
         result = USLOSS_MmuUnmap(TAG, incomingPage);
         if (result != USLOSS_MMU_OK)
         {
             USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
             USLOSS_Halt(1);
         }
+
+        // Update the page table
+        proc->pageTable[incomingPage].state = INMEM;
+        proc->pageTable[incomingPage].frame = frame;
 
         // Unblock the waiting process
         semVProc(pid);
