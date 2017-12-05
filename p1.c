@@ -54,7 +54,12 @@ static void unloadMappings(const char *caller, int pid)
 
             if (FrameTable[pte->frame].page != i)
             {
-                USLOSS_Console("%s(): Found inconsistent data in frame table.\n", caller);
+                USLOSS_Console("%s(): Frame table has wrong page for frame %d.\n", caller, pte->frame);
+                USLOSS_Halt(1);
+            }
+            if (FrameTable[pte->frame].pid != pid)
+            {
+                USLOSS_Console("%s(): Frame table has wrong pid for frame %d.\n", caller, pte->frame);
                 USLOSS_Halt(1);
             }
 
@@ -70,8 +75,6 @@ static void unloadMappings(const char *caller, int pid)
                 USLOSS_Console("%s(): Could not perform unmapping. Error code %d.\n", caller, result);
                 USLOSS_Halt(1);
             }
-
-            FrameTable[pte->frame].page = EMPTY;
         }
     }
 }
@@ -100,20 +103,6 @@ void p1_switch(int old, int new)
     // Unload all of the mappings from the old process
     unloadMappings("p1_switch", old);
 
-    // Ensure that all the frames are empty now
-    for (int i = 0; i < NumFrames; i++)
-    {
-        if (FrameTable[i].page != EMPTY)
-        {
-            USLOSS_Console("p1_switch(): Unclean intermediate frame table.\n");
-            for (int j = 0; j < NumFrames; j++)
-            {
-                USLOSS_Console("\tFrame %d contains page %d\n", j, FrameTable[j].page);
-            }
-            USLOSS_Halt(1);
-        }
-    }
-
     // Load all of the mappings for the new process
     for (int i = 0; i < NumPages; i++)
     {
@@ -124,6 +113,18 @@ void p1_switch(int old, int new)
             if (DEBUG5 && debugflag5)
             {
                 USLOSS_Console("p1_switch(): Attempting to map frame %d to page %d for process %d\n", current->frame, i, new);
+            }
+
+            // Check the frame table for consistency
+            if (FrameTable[current->frame].page != i)
+            {
+                USLOSS_Console("p1_switch(): Frame table has invalid page for frame %d\n", current->frame);
+                USLOSS_Halt(1);
+            }
+            if (FrameTable[current->frame].pid != new)
+            {
+                USLOSS_Console("p1_switch(): Frame table has invalid pid for frame %d\n", current->frame);
+                USLOSS_Halt(1);
             }
 
             if (current->state != INMEM)
@@ -138,8 +139,6 @@ void p1_switch(int old, int new)
                 USLOSS_Console("p1_switch(): Could not perform mapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
             }
-
-            FrameTable[current->frame].page = i;
         }
     }
 

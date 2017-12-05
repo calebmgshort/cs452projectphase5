@@ -51,7 +51,7 @@ typedef struct FaultMsg
     int  pid;        // Process with the problem.
     void *addr;      // Address that caused the fault.
     int  replyMbox;  // Mailbox to send reply.
-    // Add more stuff here.
+    int receivedFrame;    // Add more stuff here.
 } FaultMsg;
 
 /*
@@ -60,6 +60,8 @@ typedef struct FaultMsg
 typedef struct Frame
 {
     int page;       // The page loaded into this frame
+    int pid;        // The proc that currently owns this frame
+    int locked;     // Whether the frame is locked
 } Frame;
 
 typedef struct DiskBlock

@@ -132,14 +132,14 @@ void dumpMappings()
         }
         else if (result == USLOSS_MMU_OK)
         {
-            USLOSS_Console("\tPage %d mapped to frame %d\n", i, frame);
+            USLOSS_Console("\tPage %d mapped to frame %d owned by proc %d\n", i, frame, FrameTable[frame].pid);
      
             if (FrameTable[frame].page != i)
             {
                 USLOSS_Console("dumpMappings(): Found mapping inconsistent with the frame table.\n");
                 for (int j = 0; j < NumFrames; j++)
                 {
-                    USLOSS_Console("\tFrame %d has page %d\n", j, FrameTable[j].page);
+                    USLOSS_Console("\tFrame %d has page %d proc %d\n", j, FrameTable[j].page, FrameTable[j].pid);
                 }
                 USLOSS_Halt(1);
             }
@@ -166,6 +166,10 @@ int getNextFrame()
     for (int i = 0; i < NumFrames + 1; i++)
     {
         int index = (NextCheckedFrame + i) % NumFrames;
+        if (FrameTable[index].locked)
+        {
+            continue;
+        }
         int access;
         int result = USLOSS_MmuGetAccess(index, &access);
         if (result != USLOSS_MMU_OK)
@@ -191,8 +195,8 @@ int getNextFrame()
         }
     }
 
-    USLOSS_Console("getNextFrame(): Error: inconsistent data.");
-    USLOSS_Halt(1);
+    // USLOSS_Console("getNextFrame(): All pages blocked\n");
+    // USLOSS_Halt(1);
 
     return -1;
 }
