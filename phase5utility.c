@@ -219,9 +219,9 @@ void readPageFromDisk(char *buffer, int pid, int page)
         USLOSS_Console("readPageFromDisk(): Trying to read page without a set diskBlock. pid %d page %d.\n", pid, page);
         USLOSS_Halt(1);
     }
-    else if (proc->pageTable[page].state != ONDISK)
+    else if (proc->pageTable[page].state != INMEM)
     {
-        USLOSS_Console("readPageFromDisk(): Trying to read page that is not ONDISK. pid %d page %d.\n", pid, page);
+        USLOSS_Console("readPageFromDisk(): Trying to read page that does not belong INMEM. pid %d page %d.\n", pid, page);
         USLOSS_Halt(1);
     }
 
@@ -249,9 +249,9 @@ void writePageToDisk(char *buffer, int pid, int page)
         USLOSS_Console("writePageToDisk(): Trying to write page without a set diskBlock. pid %d page %d.\n", pid, page);
         USLOSS_Halt(1);
     }
-    else if (proc->pageTable[page].state != INMEM)
+    else if (proc->pageTable[page].state != ONDISK)
     {
-        USLOSS_Console("writePageToDisk(): Trying to write page that is not INMEM. pid %d page %d.\n", pid, page);
+        USLOSS_Console("writePageToDisk(): Trying to write page that does not belong ONDISK. pid %d page %d.\n", pid, page);
         USLOSS_Halt(1);
     }
 

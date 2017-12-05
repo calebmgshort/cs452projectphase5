@@ -165,9 +165,19 @@ void p1_quit(int pid)
         USLOSS_Console("p1_quit() called: pid = %d\n", pid);
     }
     
-    // Unload all mappings without regards to page table
+    // Unload our mappings
     unloadMappings("p1_quit", pid);
     
+    // Clear out our frames
+    for (int i = 0; i < NumFrames; i++)
+    {
+        if (FrameTable[i].pid == pid)
+        {
+            FrameTable[i].pid = EMPTY;
+            FrameTable[i].page = EMPTY;
+        }
+    }
+
     // Clean up the proc table entry for this process.
     Process *processPtr = getProc(pid);
     if (processPtr->pid == EMPTY)

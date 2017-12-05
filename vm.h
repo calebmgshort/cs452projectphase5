@@ -51,7 +51,8 @@ typedef struct FaultMsg
     int  pid;        // Process with the problem.
     void *addr;      // Address that caused the fault.
     int  replyMbox;  // Mailbox to send reply.
-    int receivedFrame;    // Add more stuff here.
+    int receivedFrame;
+    int failed;
 } FaultMsg;
 
 /*

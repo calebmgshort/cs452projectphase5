@@ -334,9 +334,11 @@ void vmDestroyReal()
  */
 static void FaultHandler(int type, void* offset)
 {
+    int pid = getpid();
+
     if (DEBUG5 && debugflag5)
     {
-        USLOSS_Console("FaultHandler(): called.\n");
+        USLOSS_Console("FaultHandler(%d): called.\n", pid);
     }
 
     assert(type == USLOSS_MMU_INT);
@@ -353,56 +355,53 @@ static void FaultHandler(int type, void* offset)
         }
     }
 
-    /*
-     * Fill in faults[pid % MAXPROC], send it to the pagers, and wait for the
-     * reply.
-     */
-    FaultMsg* currentMsgPtr = &faults[getpid()%MAXPROC];
-    currentMsgPtr->addr = offset;
-    currentMsgPtr->pid = getpid();
-    currentMsgPtr->replyMbox = FaultsMbox; // TODO figure this out
+    int failure = 1;
+    while (failure)
+    {
+        // Fill in the fault message
+        FaultMsg *faultMsg = faults + (getpid() % MAXPROC);
+        faultMsg->addr = offset;
+        faultMsg->pid = pid;
+        faultMsg->replyMbox = FaultsMbox; // TODO remove
+        faultMsg->failed = 0;
 
-    // Send to pagers
-    if (DEBUG5 && debugflag5)
-    {
-        USLOSS_Console("FaultHandler(): Sending fault for address %p.\n", currentMsgPtr->addr);
-    }
-    int pid = getpid();
-    int result = MboxSend(FaultsMbox, &pid, sizeof(int));
-    if (result != 0)
-    {
-        USLOSS_Console("FaultHandler(): MboxSend failed.\n");
-    }
-
-    if (DEBUG5 && debugflag5)
-    {
-        USLOSS_Console("FaultHandler(): Waiting for Pager.\n");
-    }
-
-    // Wait for reply
-    semPProc();
-    if (DEBUG5 && debugflag5)
-    {
-        USLOSS_Console("FaultHandler(): Returned from page fault.\n");
-    }
-
-    int canUnlock = 0;
-    for (int i = 0; i < NumFrames; i++)
-    {
-        if (!FrameTable[i].locked)
+        // Send to pager
+        if (DEBUG5 && debugflag5)
         {
-            canUnlock = 1;
-            break;
+            USLOSS_Console("FaultHandler(%d): Sending fault for address %p.\n", pid, offset);
         }
-    }
-    FrameTable[currentMsgPtr->receivedFrame].locked = FALSE;
-    if (canUnlock)
-    {
-        MboxCondSend(pagerBlockSem, NULL, 0);
+        int result = MboxSend(FaultsMbox, &pid, sizeof(int));
+        if (result != 0)
+        {
+            USLOSS_Console("FaultHandler(%d): MboxSend failed.\n", pid);
+        }
+
+        if (DEBUG5 && debugflag5)
+        {
+            USLOSS_Console("FaultHandler(%d): Waiting for Pager.\n", pid);
+        }
+
+        // Wait for reply
+        semPProc();
+        if (DEBUG5 && debugflag5)
+        {
+            USLOSS_Console("FaultHandler(%d): Returned from page fault.\n", pid);
+        }
+
+        failure = faultMsg->failed;
+        if (!failure)
+        {
+            FrameTable[faultMsg->receivedFrame].locked = FALSE;
+            // MboxCondSend(pagerBlockSem, NULL, 0);
+        }
+        else
+        {
+            // MboxReceive(pagerBlockSem, NULL, 0);
+        }
     }
 
     // Enable interrupts
-    enableInterrupts();
+    // TODO not sure this is necessary: enableInterrupts();
 } /* FaultHandler */
 
 /*
@@ -460,23 +459,38 @@ static int Pager(char *arg)
         // Check if incoming page is new
         Process *proc = getProc(pid);
         int incomingPageExists = proc->pageTable[incomingPage].state != UNUSED;
-        if (!incomingPageExists)
-        {
-            vmStats.new++;
-        }
 
         // Find the frame to replace
         int frame = getNextFrame();
-        while (frame == -1)
+        if (frame == EMPTY)
         {
-            // Block on the pager waiting semaphore
-            MboxReceive(pagerBlockSem, NULL, 0);
-            frame = getNextFrame();
+            fault->failed = TRUE;
+            semVProc(pid);
+            continue;
         }
         fault->receivedFrame = frame;
         int outgoingPage = FrameTable[frame].page;
         Process *outgoingPageProc = getProc(FrameTable[frame].pid);
 
+        // Update vmStats
+        if (!incomingPageExists)
+        {
+            vmStats.new++;
+        }
+
+        // Update the tables
+        if (outgoingPage != EMPTY)
+        {
+            outgoingPageProc->pageTable[outgoingPage].state = ONDISK;
+            outgoingPageProc->pageTable[outgoingPage].frame = EMPTY;
+        }
+        FrameTable[frame].page = incomingPage;
+        FrameTable[frame].pid = pid;
+        FrameTable[frame].locked = TRUE;
+        proc->pageTable[incomingPage].state = INMEM;
+        proc->pageTable[incomingPage].frame = frame;
+
+        // Check the access bits
         int access;
         result = USLOSS_MmuGetAccess(frame, &access);
         if (result != USLOSS_MMU_OK)
@@ -485,12 +499,12 @@ static int Pager(char *arg)
             USLOSS_Halt(1);
         }
 
-        // write to disk if necessary
+        // Write to disk if necessary
         if (outgoingPage != EMPTY && (access & USLOSS_MMU_DIRTY))
         {
             if (DEBUG5 && debugflag5)
             {
-                USLOSS_Console("Pager(): Writing page %d to disk for pid %d.\n", outgoingPage, pid);
+                USLOSS_Console("Pager(): Writing page %d to disk for pid %d.\n", outgoingPage, outgoingPageProc->pid);
             }
 
             // Get the appropriate disk block
@@ -525,20 +539,17 @@ static int Pager(char *arg)
                 USLOSS_Console("Pager(): Could not perform unmapping. Error code %d.\n", result);
                 USLOSS_Halt(1);
             }
-            writePageToDisk(buffer, pid, outgoingPage);
+            writePageToDisk(buffer, outgoingPageProc->pid, outgoingPage);
         }
 
-        // Update the page table about the removal
-        if (outgoingPage != EMPTY)
-        {
-            outgoingPageProc->pageTable[outgoingPage].state = ONDISK;
-            outgoingPageProc->pageTable[outgoingPage].frame = -1;
-        }
-
-        // Initialize the buffer to match the page
+        // Initialize the buffer to match the incoming page
         char buffer[USLOSS_MmuPageSize()];
         if (incomingPageExists && proc->pageTable[incomingPage].diskBlock != EMPTY)
         {
+            if (DEBUG5 && debugflag5)
+            {
+                USLOSS_Console("Pager(): Reading page %d from disk for pid %d.\n", incomingPage, pid);
+            }
             readPageFromDisk(buffer, pid, incomingPage);
         }
         else
@@ -564,10 +575,6 @@ static int Pager(char *arg)
             USLOSS_Halt(1);
         }
 
-        FrameTable[frame].page = incomingPage;
-        FrameTable[frame].pid = pid;
-        FrameTable[frame].locked = TRUE;
-
         // Mark the buffer as clean
         result = USLOSS_MmuSetAccess(frame, access & ~USLOSS_MMU_DIRTY);
         if (result != USLOSS_MMU_OK)
@@ -575,10 +582,6 @@ static int Pager(char *arg)
             USLOSS_Console("Pager(): Could not set frame access bits.\n");
             USLOSS_Halt(1);
         }
-
-        // Update the page table
-        proc->pageTable[incomingPage].state = INMEM;
-        proc->pageTable[incomingPage].frame = frame;
 
         if (DEBUG5 && debugflag5)
         {
