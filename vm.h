@@ -50,9 +50,9 @@ typedef struct FaultMsg
 {
     int  pid;        // Process with the problem.
     void *addr;      // Address that caused the fault.
-    int  replyMbox;  // Mailbox to send reply.
     int receivedFrame;
     int failed;
+    int shouldTerminate;
 } FaultMsg;
 
 /*
@@ -64,11 +64,6 @@ typedef struct Frame
     int pid;        // The proc that currently owns this frame
     int locked;     // Whether the frame is locked
 } Frame;
-
-typedef struct DiskBlock
-{
-    int page;       // The page stored in this block
-} DiskBlock;
 
 extern int vmStatsMutex;
 

@@ -145,7 +145,7 @@ void dumpMappings()
         else if (result == USLOSS_MMU_OK)
         {
             USLOSS_Console("\tPage %d mapped to frame %d owned by proc %d\n", i, frame, FrameTable[frame].pid);
-     
+
             if (FrameTable[frame].page != i)
             {
                 USLOSS_Console("dumpMappings(): Found mapping inconsistent with the frame table.\n");
@@ -237,8 +237,6 @@ void readPageFromDisk(char *buffer, int pid, int page)
         USLOSS_Halt(1);
     }
 
-    // TODO also check the disk table for consistency
-
     int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
     int totalSectors = sectorsPerPage * diskBlock;
     int track = totalSectors / USLOSS_DISK_TRACK_SIZE;
@@ -266,8 +264,6 @@ void writePageToDisk(char *buffer, int pid, int page)
         USLOSS_Console("writePageToDisk(): Trying to write page that does not belong ONDISK. pid %d page %d.\n", pid, page);
         USLOSS_Halt(1);
     }
-
-    // TODO also check the disk table for consistency
 
     int sectorsPerPage = USLOSS_MmuPageSize() / USLOSS_DISK_SECTOR_SIZE;
     int totalSectors = sectorsPerPage * diskBlock;

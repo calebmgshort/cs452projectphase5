@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 1;
+int debugflag5 = 0;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -43,7 +43,6 @@ Frame *FrameTable;
 int NextCheckedFrame = 0;
 
 // The Disk Table
-DiskBlock *DiskTable;
 int NextBlock = 0;
 
 // Global Mmu info
@@ -309,8 +308,13 @@ void vmDestroyReal()
     // Print vm statistics.
     PrintStats();
 
-    //TODO: Free any allocated memory
-
+    //Free any allocated memory
+    for (int i = 0; i < MAXPROC; i++)
+    {
+        Process *proc = getProc(i);
+        free(proc->pageTable);
+    }
+    free(FrameTable);
 
 } /* vmDestroyReal */
 
@@ -361,8 +365,8 @@ static void FaultHandler(int type, void* offset)
         FaultMsg *faultMsg = faults + (getpid() % MAXPROC);
         faultMsg->addr = offset;
         faultMsg->pid = pid;
-        faultMsg->replyMbox = FaultsMbox; // TODO remove
         faultMsg->failed = 0;
+        faultMsg->shouldTerminate = 0;
 
         // Send to pager
         if (DEBUG5 && debugflag5)
@@ -398,9 +402,6 @@ static void FaultHandler(int type, void* offset)
             // MboxReceive(pagerBlockSem, NULL, 0);
         }
     }
-
-    // Enable interrupts
-    // TODO not sure this is necessary: enableInterrupts();
 } /* FaultHandler */
 
 /*
@@ -510,20 +511,20 @@ static int Pager(char *arg)
             int block = outgoingPageProc->pageTable[outgoingPage].diskBlock;
             if (block == -1)
             {
-                if (NextBlock == 64)
+                if (NextBlock == vmStats.diskBlocks)
                 {
                     USLOSS_Console("Pager(): Swap disk has run out of space.\n");
-                    USLOSS_Halt(1);
-                    // TODO should terminate proc instead of halt
+                    fault->shouldTerminate = TRUE;
+                    semVProc(pid);
+                    continue;
                 }
 
                 // Find a new block
                 block = NextBlock++;
                 outgoingPageProc->pageTable[outgoingPage].diskBlock = block;
-                // TODO update disk table
             }
 
-            // Read the buffer from the vmRegion and write to disk TODO what if timesliced?
+            // Read the buffer from the vmRegion and write to disk
             char buffer[USLOSS_MmuPageSize()];
             result = USLOSS_MmuMap(TAG, outgoingPage, frame, USLOSS_MMU_PROT_RW);
             if (result != USLOSS_MMU_OK)
@@ -559,7 +560,7 @@ static int Pager(char *arg)
             }
         }
 
-        // Write the buffer TODO what if we are timesliced with the temp mapping?
+        // Write the buffer
         result = USLOSS_MmuMap(TAG, incomingPage, frame, USLOSS_MMU_PROT_RW);
         if (result != USLOSS_MMU_OK)
         {

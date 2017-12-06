@@ -27,7 +27,6 @@ void vmInit(USLOSS_Sysargs *args)
     int frames = (int) ((long) args->arg3);
     int pagers = (int) ((long) args->arg4);
     void *result = vmInitReal(mappings, pages, frames, pagers);
-    // TODO output
     if ((long) result <= 0)
     {
         args->arg1 = NULL;
