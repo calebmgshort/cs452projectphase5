@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 0;
+int debugflag5 = 1;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -307,6 +307,8 @@ void vmDestroyReal()
 
     // Print vm statistics.
     PrintStats();
+
+    VMInitialized = FALSE;
 
     //Free any allocated memory
     for (int i = 0; i < MAXPROC; i++)
