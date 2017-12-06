@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 1;
+int debugflag5 = 0;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -46,7 +46,7 @@ int NextCheckedFrame = 0;
 int NextBlock = 0;
 
 // Global Mmu info
-int VMInitialized = 0;
+int VMInitialized = FALSE;
 int NumPages = 0;
 int NumFrames = 0;
 
@@ -220,7 +220,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     // Zero out, then initialize, the vmStats structure
     initVmStats(&vmStats, pages, frames);
 
-    VMInitialized = 1;
+    VMInitialized = TRUE;
     int dummy;
     return USLOSS_MmuRegion(&dummy);
 } /* vmInitReal */
@@ -351,24 +351,15 @@ static void FaultHandler(int type, void* offset)
     assert(cause == USLOSS_MMU_FAULT);
     vmStats.faults++;
 
-    for (int i = 0; i < NumFrames; i++)
-    {
-        if (!FrameTable[i].locked)
-        {
-            MboxCondSend(pagerBlockSem, NULL, 0);
-            break;
-        }
-    }
-
-    int failure = 1;
+    int failure = TRUE;
     while (failure)
     {
         // Fill in the fault message
         FaultMsg *faultMsg = faults + (getpid() % MAXPROC);
         faultMsg->addr = offset;
         faultMsg->pid = pid;
-        faultMsg->failed = 0;
-        faultMsg->shouldTerminate = 0;
+        faultMsg->failed = FALSE;
+        faultMsg->shouldTerminate = FALSE;
 
         // Send to pager
         if (DEBUG5 && debugflag5)
@@ -393,15 +384,15 @@ static void FaultHandler(int type, void* offset)
             USLOSS_Console("FaultHandler(%d): Returned from page fault.\n", pid);
         }
 
+        if (faultMsg->shouldTerminate)
+        {
+            terminateReal(-1);
+        }
+
         failure = faultMsg->failed;
         if (!failure)
         {
             FrameTable[faultMsg->receivedFrame].locked = FALSE;
-            // MboxCondSend(pagerBlockSem, NULL, 0);
-        }
-        else
-        {
-            // MboxReceive(pagerBlockSem, NULL, 0);
         }
     }
 } /* FaultHandler */
@@ -427,7 +418,7 @@ static int Pager(char *arg)
     {
         USLOSS_Console("Pager(): called.\n");
     }
-    while (1)
+    while (TRUE)
     {
         // Kill pager if we are zapped
         if (isZapped())
@@ -511,7 +502,7 @@ static int Pager(char *arg)
 
             // Get the appropriate disk block
             int block = outgoingPageProc->pageTable[outgoingPage].diskBlock;
-            if (block == -1)
+            if (block == EMPTY)
             {
                 if (NextBlock == vmStats.diskBlocks)
                 {

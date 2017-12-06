@@ -10,6 +10,7 @@
 #define FALSE 0
 #define TRUE 1
 
+#define SWAPDISK 1
 /*
  * All processes use the same tag.
  */

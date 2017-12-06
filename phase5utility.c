@@ -207,10 +207,7 @@ int getNextFrame()
         }
     }
 
-    // USLOSS_Console("getNextFrame(): All pages blocked\n");
-    // USLOSS_Halt(1);
-
-    return -1;
+    return EMPTY;
 }
 
 void *page(int pageNum)
@@ -243,7 +240,7 @@ void readPageFromDisk(char *buffer, int pid, int page)
     int sector = totalSectors % USLOSS_DISK_TRACK_SIZE;
 
     // Read into a buffer
-    diskReadReal(1, track, sector, sectorsPerPage, buffer);
+    diskReadReal(SWAPDISK, track, sector, sectorsPerPage, buffer);
 }
 
 void writePageToDisk(char *buffer, int pid, int page)
@@ -271,5 +268,5 @@ void writePageToDisk(char *buffer, int pid, int page)
     int sector = totalSectors / USLOSS_DISK_TRACK_SIZE;
 
     // Write the contents of the buffer
-    diskWriteReal(1, track, sector, sectorsPerPage, buffer);
+    diskWriteReal(SWAPDISK, track, sector, sectorsPerPage, buffer);
 }
