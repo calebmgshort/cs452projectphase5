@@ -1,3 +1,10 @@
+/*
+ *  File:  phase5utility.c
+ *
+ *  Description:  This file contains utility functions used throughout this phase
+ *
+ */
+
 #include <usloss.h>
 #include <usyscall.h>
 #include <assert.h>
@@ -34,7 +41,9 @@ void setToUserMode()
     }
 }
 
-// Initialize the page table for the process with the given pid
+/*
+ *  Initialize the page table for the process with the given pid
+ */
 void initPageTable(int pid)
 {
     Process *proc = getProc(pid);
@@ -46,12 +55,18 @@ void initPageTable(int pid)
     }
 }
 
+/*
+ *  Return a new mutex
+ */
 int createMutex()
 {
     CheckMode();
     return MboxCreate(1, 0);
 }
 
+/*
+ *  Lock the mutex with the given mailbox handle
+ */
 void lockMutex(int mbox)
 {
     if (USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)
@@ -64,6 +79,9 @@ void lockMutex(int mbox)
     }
 }
 
+/*
+ *  Unlock the mutex with the given mailbox handle
+ */
 void unlockMutex(int mbox)
 {
     if (USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)
@@ -76,23 +94,35 @@ void unlockMutex(int mbox)
     }
 }
 
+/*
+ *  Return the pointer to the process with the given pid
+ */
 Process *getProc(int pid)
 {
     return &ProcTable[pid % MAXPROC];
 }
 
+/*
+ *  Perform a p operation on the currrent process's private semaphore
+ */
 void semPProc()
 {
     CheckMode();
     sempReal(getProc(getpid())->privateSem);
 }
 
+/*
+ *  Perform a v operation on the given process's private semaphore
+ */
 void semVProc(int pid)
 {
     CheckMode();
     semvReal(getProc(pid)->privateSem);
 }
 
+/*
+ *  Initialize VM stats
+ */
 void initVmStats(VmStats *vmStats, int pages, int frames)
 {
     vmStatsMutex = createMutex();
@@ -116,6 +146,9 @@ void initVmStats(VmStats *vmStats, int pages, int frames)
     vmStats->replaced = 0;
 }
 
+/*
+ *  Enable interrupts
+ */
 void enableInterrupts()
 {
     int result = USLOSS_PsrSet(USLOSS_PsrGet() | USLOSS_PSR_CURRENT_INT);
@@ -126,6 +159,9 @@ void enableInterrupts()
     }
 }
 
+/*
+ *  A debugging function that prints out the mappings currently in the mmu
+ */
 void dumpMappings()
 {
     USLOSS_Console("dumpMappings(): called\n");
@@ -163,6 +199,10 @@ void dumpMappings()
     }
 }
 
+/*
+ *  The function that determines the frame to use in the frame table.
+ *  Return an empty frame if availabe; use the clock algorithm otherwise
+ */
 int getNextFrame()
 {
     // Search for a free frame
@@ -210,11 +250,17 @@ int getNextFrame()
     return EMPTY;
 }
 
+/*
+ *  Returns the address of the page with the given pageNum
+ */
 void *page(int pageNum)
 {
     return vmRegion + USLOSS_MmuPageSize() * pageNum;
 }
 
+/*
+ *  Read the given page in the process with the given pid from disk into the buffer
+ */
 void readPageFromDisk(char *buffer, int pid, int page)
 {
     CheckMode();
@@ -243,6 +289,9 @@ void readPageFromDisk(char *buffer, int pid, int page)
     diskReadReal(SWAPDISK, track, sector, sectorsPerPage, buffer);
 }
 
+/*
+ *  Write the given page in the process with the given pid from the buffer into the disk
+ */
 void writePageToDisk(char *buffer, int pid, int page)
 {
     CheckMode();

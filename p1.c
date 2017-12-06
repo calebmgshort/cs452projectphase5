@@ -1,3 +1,10 @@
+/*
+ *  File:  p1.c
+ *
+ *  Description:  This file contains the phase5 functions called by phase1
+ *
+ */
+
 #include <usloss.h>
 #include <usyscall.h>
 #include <string.h>
@@ -12,6 +19,10 @@ extern int NumPages;
 extern Frame *FrameTable;
 extern int NumFrames;
 
+/*
+ *  The code that phase 1 should call when a new process is forked.
+ *  Initializes the phase 5 process table for this process
+ */
 void p1_fork(int pid)
 {
     // Don't run unluss VMInit has already been called
@@ -37,6 +48,9 @@ void p1_fork(int pid)
     initPageTable(pid);
 } /* p1_fork */
 
+/*
+ *  Unload the mappings for the process with the given pid
+ */
 static void unloadMappings(const char *caller, int pid)
 {
     Process *proc = getProc(pid);
@@ -79,6 +93,10 @@ static void unloadMappings(const char *caller, int pid)
     }
 }
 
+/*
+ *  The code that phase 1 should call when a process switch occurs
+ *  Changes out the mappings based on the page tables of the old and new procs
+ */
 void p1_switch(int old, int new)
 {
     // Don't run unluss VMInit has already been called
@@ -152,6 +170,10 @@ void p1_switch(int old, int new)
     vmStats.switches++;
 } /* p1_switch */
 
+/*
+ *  The code that phase 1 should call when a process is quit
+ *  Cleans up the phase 5 proc table proc table for the given proc
+ */
 void p1_quit(int pid)
 {
     // Don't run unluss VMInit has already been called
@@ -164,10 +186,10 @@ void p1_quit(int pid)
     {
         USLOSS_Console("p1_quit() called: pid = %d\n", pid);
     }
-    
+
     // Unload our mappings
     unloadMappings("p1_quit", pid);
-    
+
     // Clear out our frames
     for (int i = 0; i < NumFrames; i++)
     {
