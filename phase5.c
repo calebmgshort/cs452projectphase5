@@ -18,7 +18,7 @@
 #include "providedPrototypes.h"
 
 // Debugging flag
-int debugflag5 = 0;
+int debugflag5 = 1;
 
 // Process info
 Process ProcTable[MAXPROC];
@@ -52,7 +52,6 @@ int NumPages = 0;
 int NumFrames = 0;
 
 static void FaultHandler(int, void *);
-static void PrintStats();
 static int Pager(char *);
 
 extern int start5(char *);

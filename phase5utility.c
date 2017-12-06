@@ -54,14 +54,26 @@ int createMutex()
 
 void lockMutex(int mbox)
 {
-    CheckMode();
-    MboxSend(mbox, NULL, 0);
+    if (USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)
+    {
+        MboxSend(mbox, NULL, 0);
+    }
+    else
+    {
+        Mbox_Send(mbox, NULL, 0);
+    }
 }
 
 void unlockMutex(int mbox)
 {
-    CheckMode();
-    MboxReceive(mbox, NULL, 0);
+    if (USLOSS_PsrGet() & USLOSS_PSR_CURRENT_MODE)
+    {
+        MboxReceive(mbox, NULL, 0);
+    }
+    else
+    {
+        Mbox_Receive(mbox, NULL, 0);
+    }
 }
 
 Process *getProc(int pid)
