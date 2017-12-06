@@ -1,3 +1,10 @@
+/*
+ *  File:  syscallHandlers.c
+ *
+ *  Description:  This file contains the syscall handlers for this phase
+ *
+ */
+
 #include <usloss.h>
 #include <usyscall.h>
 #include <assert.h>
@@ -14,6 +21,9 @@
 extern void *vmInitReal(int, int, int, int);
 extern void vmDestroyReal();
 
+/*
+ *  Syscall handler for VmInit
+ */
 void vmInit(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -41,6 +51,9 @@ void vmInit(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for VmDestroy
+ */
 void vmDestroy(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -53,6 +66,9 @@ void vmDestroy(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for MboxCreate
+ */
 void mboxCreate(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -77,6 +93,9 @@ void mboxCreate(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for MboxRelease
+ */
 void mboxRelease(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -98,6 +117,9 @@ void mboxRelease(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for MboxSend
+ */
 void mboxSend(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -121,6 +143,9 @@ void mboxSend(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for MboxCondSend
+ */
 void mboxCondSend(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -148,6 +173,9 @@ void mboxCondSend(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for MboxReceive
+ */
 void mboxReceive(USLOSS_Sysargs *args)
 {
     CheckMode();
@@ -171,6 +199,9 @@ void mboxReceive(USLOSS_Sysargs *args)
     setToUserMode();
 }
 
+/*
+ *  Syscall handler for MboxCondReceive
+ */
 void mboxCondReceive(USLOSS_Sysargs *args)
 {
     CheckMode();
