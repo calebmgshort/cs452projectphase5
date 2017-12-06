@@ -265,7 +265,9 @@ void readPageFromDisk(char *buffer, int pid, int page)
 {
     CheckMode();
 
+    lockMutex(vmStatsMutex);
     vmStats.pageIns++;
+    unlockMutex(vmStatsMutex);
 
     Process *proc = getProc(pid);
     int diskBlock = proc->pageTable[page].diskBlock;
@@ -296,7 +298,9 @@ void writePageToDisk(char *buffer, int pid, int page)
 {
     CheckMode();
 
+    lockMutex(vmStatsMutex);
     vmStats.pageOuts++;
+    unlockMutex(vmStatsMutex);
 
     Process *proc = getProc(pid);
     int diskBlock = proc->pageTable[page].diskBlock;

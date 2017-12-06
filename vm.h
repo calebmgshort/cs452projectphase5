@@ -49,11 +49,11 @@ typedef struct Process
  */
 typedef struct FaultMsg
 {
-    int  pid;        // Process with the problem.
-    void *addr;      // Address that caused the fault.
-    int receivedFrame;
-    int failed;
-    int shouldTerminate;
+    int  pid;            // Process with the problem.
+    void *addr;          // Address that caused the fault.
+    int receivedFrame;   // The frame returned to the process
+    int failed;          // True if the assignment failed
+    int shouldTerminate; // True if the sufferer should be terminated
 } FaultMsg;
 
 /*

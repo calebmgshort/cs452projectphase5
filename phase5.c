@@ -26,6 +26,12 @@ int debugflag5 = 0;
 
 // Process info
 Process ProcTable[MAXPROC];
+
+/*
+ * faults[i] stores info about the current page fault for the process stored in
+ * ProcTable[i]. Only the Pagers and the process who "owns" faults[i] may
+ * access it. Their interaction is already managed, so no mutex is necessary.
+ */
 FaultMsg faults[MAXPROC];
 
 // Vm Stats
@@ -36,8 +42,8 @@ int vmStatsMutex;
 int NumPagers;
 int PagerPIDs[MAXPAGERS];
 int FaultsMbox;
-int destroySem;
-int pagerBlockSem;
+int PagerKillSem;
+int NextBlock = 0;
 
 // Start of the Vm Region
 void *vmRegion;
@@ -45,9 +51,7 @@ void *vmRegion;
 // Frame table
 Frame *FrameTable;
 int NextCheckedFrame = 0;
-
-// The Disk Table
-int NextBlock = 0;
+int FramesMutex;
 
 // Global Mmu info
 int VMInitialized = FALSE;
@@ -82,12 +86,12 @@ int start4(char *arg)
     }
 
     /* to get user-process access to mailbox functions */
-    systemCallVec[SYS_MBOXCREATE]      = mboxCreate;
-    systemCallVec[SYS_MBOXRELEASE]     = mboxRelease;
-    systemCallVec[SYS_MBOXSEND]        = mboxSend;
-    systemCallVec[SYS_MBOXRECEIVE]     = mboxReceive;
-    systemCallVec[SYS_MBOXCONDSEND]    = mboxCondSend;
-    systemCallVec[SYS_MBOXCONDRECEIVE] = mboxCondReceive;
+    systemCallVec[SYS_MBOXCREATE]      = mbox_create;
+    systemCallVec[SYS_MBOXRELEASE]     = mbox_release;
+    systemCallVec[SYS_MBOXSEND]        = mbox_send;
+    systemCallVec[SYS_MBOXRECEIVE]     = mbox_receive;
+    systemCallVec[SYS_MBOXCONDSEND]    = mbox_condsend;
+    systemCallVec[SYS_MBOXCONDRECEIVE] = mbox_condreceive;
 
     /* user-process access to VM functions */
     systemCallVec[SYS_VMINIT]    = vmInit;
@@ -189,6 +193,7 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
         FrameTable[i].pid = EMPTY;
         FrameTable[i].locked = FALSE;
     }
+    FramesMutex = createMutex();
 
     // Create the fault mailbox.
     FaultsMbox = MboxCreate(MAXPROC, MAX_MESSAGE);
@@ -213,12 +218,6 @@ void *vmInitReal(int mappings, int pages, int frames, int pagers)
     for (int i = pagers; i < MAXPAGERS; i++)
     {
         PagerPIDs[i] = -1;
-    }
-    pagerBlockSem = MboxCreate(0, 0);
-    if (pagerBlockSem < 0)
-    {
-        USLOSS_Console("vmInitReal(): Could not create pager blocking semaphore.\n");
-        USLOSS_Halt(1);
     }
 
     // Zero out, then initialize, the vmStats structure
@@ -296,12 +295,12 @@ void vmDestroyReal()
     /*
      * Kill the pagers here.
      */
-    destroySem = semcreateReal(0);
+    PagerKillSem = semcreateReal(0);
     for (int i = 0; i < NumPagers; i++)
     {
         int kill = -1;
         MboxSend(FaultsMbox, &kill, sizeof(int));
-        sempReal(destroySem);
+        sempReal(PagerKillSem);
     }
 
     if (result != USLOSS_MMU_OK)
@@ -314,7 +313,7 @@ void vmDestroyReal()
 
     VMInitialized = FALSE;
 
-    //Free any allocated memory
+    // Free any allocated memory
     for (int i = 0; i < MAXPROC; i++)
     {
         Process *proc = getProc(i);
@@ -353,7 +352,11 @@ static void FaultHandler(int type, void* offset)
     assert(type == USLOSS_MMU_INT);
     int cause = USLOSS_MmuGetCause();
     assert(cause == USLOSS_MMU_FAULT);
+    
+    // Update vmStats
+    lockMutex(vmStatsMutex);
     vmStats.faults++;
+    unlockMutex(vmStatsMutex);
 
     int failure = TRUE;
     while (failure)
@@ -390,13 +393,15 @@ static void FaultHandler(int type, void* offset)
 
         if (faultMsg->shouldTerminate)
         {
-            terminateReal(-1);
+            terminateReal(1);
         }
 
         failure = faultMsg->failed;
         if (!failure)
         {
+            lockMutex(FramesMutex);
             FrameTable[faultMsg->receivedFrame].locked = FALSE;
+            unlockMutex(FramesMutex);
         }
     }
 } /* FaultHandler */
@@ -458,7 +463,9 @@ static int Pager(char *arg)
         int incomingPageExists = proc->pageTable[incomingPage].state != UNUSED;
 
         // Find the frame to replace
+        lockMutex(FramesMutex);
         int frame = getNextFrame();
+        unlockMutex(FramesMutex);
         if (frame == EMPTY)
         {
             fault->failed = TRUE;
@@ -472,7 +479,9 @@ static int Pager(char *arg)
         // Update vmStats
         if (!incomingPageExists)
         {
+            lockMutex(vmStatsMutex);
             vmStats.new++;
+            unlockMutex(vmStatsMutex);
         }
 
         // Update the tables
@@ -588,6 +597,6 @@ static int Pager(char *arg)
         // Unblock the waiting process
         semVProc(pid);
     }
-    semvReal(destroySem);
+    semvReal(PagerKillSem);
     return 0;
 } /* Pager */
